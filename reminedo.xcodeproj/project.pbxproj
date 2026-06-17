@@ -11,9 +11,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3C63B5A52FE28D5900FF9B1D /* reminedo */ = {
+		3C63B5A52FE28D5900FF9B1D /* reminedoSrc */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = reminedo;
+			path = reminedoSrc;
+			sourceTree = "<group>";
+		};
+		3C63B5B12FE28DB600FF9B1D /* prd */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = prd;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +37,8 @@
 		3C63B59A2FE28D5900FF9B1D = {
 			isa = PBXGroup;
 			children = (
-				3C63B5A52FE28D5900FF9B1D /* reminedo */,
+				3C63B5B12FE28DB600FF9B1D /* prd */,
+				3C63B5A52FE28D5900FF9B1D /* reminedoSrc */,
 				3C63B5A42FE28D5900FF9B1D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,7 +67,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3C63B5A52FE28D5900FF9B1D /* reminedo */,
+				3C63B5A52FE28D5900FF9B1D /* reminedoSrc */,
+				3C63B5B12FE28DB600FF9B1D /* prd */,
 			);
 			name = reminedo;
 			packageProductDependencies = (
