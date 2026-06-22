@@ -6,8 +6,47 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D1D1D1D1D1D1D1D1D1D1000B /* ReminedoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1D1D1D1D1D1D1D1D1D10001 /* ReminedoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D2D2D2D2D2D2D2D2D2D2000B /* ReminedoWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D2D2D2D2D2D2D2D2D2D20001 /* ReminedoWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D1D1D1D1D1D1D1D1D1D1000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3C63B59B2FE28D5900FF9B1D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1D1D1D1D1D1D1D1D1D10003;
+			remoteInfo = ReminedoShare;
+		};
+		D2D2D2D2D2D2D2D2D2D2000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3C63B59B2FE28D5900FF9B1D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2D2D2D2D2D2D2D2D2D20003;
+			remoteInfo = ReminedoWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D1D1D1D1D1D1D1D1D1D1000A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D1D1D1D1D1D1D1D1D1D1000B /* ReminedoShare.appex in Embed Foundation Extensions */,
+				D2D2D2D2D2D2D2D2D2D2000B /* ReminedoWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		3C63B5A32FE28D5900FF9B1D /* reminedo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = reminedo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1D1D1D1D1D1D1D1D1D10001 /* ReminedoShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ReminedoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2D2D2D2D2D2D2D2D2D20001 /* ReminedoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ReminedoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -21,10 +60,39 @@
 			path = prd;
 			sourceTree = "<group>";
 		};
+		D1D1D1D1D1D1D1D1D1D10002 /* ReminedoShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ReminedoShare;
+			sourceTree = "<group>";
+		};
+		D2D2D2D2D2D2D2D2D2D20002 /* ReminedoWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ReminedoWidget;
+			sourceTree = "<group>";
+		};
+		D3D3D3D3D3D3D3D3D3D30001 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		3C63B5A02FE28D5900FF9B1D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1D1D1D1D1D1D1D1D1D10008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2D2D2D2D2D2D2D2D2D20008 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -39,6 +107,9 @@
 			children = (
 				3C63B5B12FE28DB600FF9B1D /* prd */,
 				3C63B5A52FE28D5900FF9B1D /* reminedoSrc */,
+				D3D3D3D3D3D3D3D3D3D30001 /* Shared */,
+				D1D1D1D1D1D1D1D1D1D10002 /* ReminedoShare */,
+				D2D2D2D2D2D2D2D2D2D20002 /* ReminedoWidget */,
 				3C63B5A42FE28D5900FF9B1D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +118,8 @@
 			isa = PBXGroup;
 			children = (
 				3C63B5A32FE28D5900FF9B1D /* reminedo.app */,
+				D1D1D1D1D1D1D1D1D1D10001 /* ReminedoShare.appex */,
+				D2D2D2D2D2D2D2D2D2D20001 /* ReminedoWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,14 +134,17 @@
 				3C63B59F2FE28D5900FF9B1D /* Sources */,
 				3C63B5A02FE28D5900FF9B1D /* Frameworks */,
 				3C63B5A12FE28D5900FF9B1D /* Resources */,
+				D1D1D1D1D1D1D1D1D1D1000A /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D1D1D1D1D1D1D1D1D1D1000C /* PBXTargetDependency */,
+				D2D2D2D2D2D2D2D2D2D2000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				3C63B5A52FE28D5900FF9B1D /* reminedoSrc */,
-				3C63B5B12FE28DB600FF9B1D /* prd */,
+				D3D3D3D3D3D3D3D3D3D30001 /* Shared */,
 			);
 			name = reminedo;
 			packageProductDependencies = (
@@ -76,6 +152,51 @@
 			productName = reminedo;
 			productReference = 3C63B5A32FE28D5900FF9B1D /* reminedo.app */;
 			productType = "com.apple.product-type.application";
+		};
+		D1D1D1D1D1D1D1D1D1D10003 /* ReminedoShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1D1D1D1D1D1D1D1D1D10004 /* Build configuration list for PBXNativeTarget "ReminedoShare" */;
+			buildPhases = (
+				D1D1D1D1D1D1D1D1D1D10007 /* Sources */,
+				D1D1D1D1D1D1D1D1D1D10008 /* Frameworks */,
+				D1D1D1D1D1D1D1D1D1D10009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1D1D1D1D1D1D1D1D1D10002 /* ReminedoShare */,
+			);
+			name = ReminedoShare;
+			packageProductDependencies = (
+			);
+			productName = ReminedoShare;
+			productReference = D1D1D1D1D1D1D1D1D1D10001 /* ReminedoShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		D2D2D2D2D2D2D2D2D2D20003 /* ReminedoWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2D2D2D2D2D2D2D2D2D20004 /* Build configuration list for PBXNativeTarget "ReminedoWidget" */;
+			buildPhases = (
+				D2D2D2D2D2D2D2D2D2D20007 /* Sources */,
+				D2D2D2D2D2D2D2D2D2D20008 /* Frameworks */,
+				D2D2D2D2D2D2D2D2D2D20009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D2D2D2D2D2D2D2D2D2D20002 /* ReminedoWidget */,
+				D3D3D3D3D3D3D3D3D3D30001 /* Shared */,
+			);
+			name = ReminedoWidget;
+			packageProductDependencies = (
+			);
+			productName = ReminedoWidget;
+			productReference = D2D2D2D2D2D2D2D2D2D20001 /* ReminedoWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -88,6 +209,12 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					3C63B5A22FE28D5900FF9B1D = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					D1D1D1D1D1D1D1D1D1D10003 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					D2D2D2D2D2D2D2D2D2D20003 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -107,12 +234,28 @@
 			projectRoot = "";
 			targets = (
 				3C63B5A22FE28D5900FF9B1D /* reminedo */,
+				D1D1D1D1D1D1D1D1D1D10003 /* ReminedoShare */,
+				D2D2D2D2D2D2D2D2D2D20003 /* ReminedoWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		3C63B5A12FE28D5900FF9B1D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1D1D1D1D1D1D1D1D1D10009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2D2D2D2D2D2D2D2D2D20009 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -129,7 +272,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D1D1D1D1D1D1D1D1D1D10007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2D2D2D2D2D2D2D2D2D20007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D1D1D1D1D1D1D1D1D1D1000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1D1D1D1D1D1D1D1D1D10003 /* ReminedoShare */;
+			targetProxy = D1D1D1D1D1D1D1D1D1D1000D /* PBXContainerItemProxy */;
+		};
+		D2D2D2D2D2D2D2D2D2D2000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2D2D2D2D2D2D2D2D2D20003 /* ReminedoWidget */;
+			targetProxy = D2D2D2D2D2D2D2D2D2D2000D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		3C63B5AC2FE28D5A00FF9B1D /* Debug */ = {
@@ -184,7 +354,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -241,7 +411,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -256,10 +426,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/reminedo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -287,10 +459,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/reminedo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -313,6 +487,108 @@
 			};
 			name = Release;
 		};
+		D1D1D1D1D1D1D1D1D1D10005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ReminedoShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/ReminedoShare-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.geniusjun.reminedo.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D1D1D1D1D1D1D1D1D1D10006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ReminedoShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/ReminedoShare-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.geniusjun.reminedo.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D2D2D2D2D2D2D2D2D2D20005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ReminedoWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/ReminedoWidget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.geniusjun.reminedo.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D2D2D2D2D2D2D2D2D2D20006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ReminedoWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/ReminedoWidget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.geniusjun.reminedo.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -330,6 +606,24 @@
 			buildConfigurations = (
 				3C63B5AF2FE28D5A00FF9B1D /* Debug */,
 				3C63B5B02FE28D5A00FF9B1D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1D1D1D1D1D1D1D1D1D10004 /* Build configuration list for PBXNativeTarget "ReminedoShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1D1D1D1D1D1D1D1D1D10005 /* Debug */,
+				D1D1D1D1D1D1D1D1D1D10006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2D2D2D2D2D2D2D2D2D20004 /* Build configuration list for PBXNativeTarget "ReminedoWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2D2D2D2D2D2D2D2D2D20005 /* Debug */,
+				D2D2D2D2D2D2D2D2D2D20006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -15,3 +15,23 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
+Package.resolved
+
+# Build / distribution artifacts
+*.ipa
+*.dSYM/
+*.dSYM.zip
+*.hmap
+timeline.xctimeline
+playground.xcworkspace
+
+# Editor / OS junk
+.idea/
+.vscode/
+*.swp
+*~
+
+# Secrets / local config
+*.env
+.env
+secrets.plist

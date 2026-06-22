@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+	<!-- 스누즈 카운트다운 Live Activity(§4.6 확장). 잠금화면/다이내믹 아일랜드. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<!-- BGTask 백그라운드 복구(§9 Phase 5 후보). 식별자는 SharedConstants.backgroundRefreshTaskID와 일치.
+	     audio: 알람 keep-alive(무음 루프로 앱 생존 + 알람 시각 풀볼륨 재생, AVAudioSession.playback). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>audio</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.geniusjun.reminedo.refresh</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.geniusjun.reminedo</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>reminedo</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
