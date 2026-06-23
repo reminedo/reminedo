@@ -35,3 +35,6 @@ playground.xcworkspace
 *.env
 .env
 secrets.plist
+
+# Xcode auto-generated per-config entitlements (our real ones live in Config/*.entitlements)
+*Debug.entitlements
