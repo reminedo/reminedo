@@ -102,13 +102,37 @@ struct ReminedoApp: App {
                 appState.pendingRoute = .edit(uuid)
             }
         case "add":
-            // 공유 진입(§2.3/§4.10): App Group 페이로드를 소비(읽고 삭제)해 추가 시트를 연다.
-            // 페이로드가 있으면 URL 프리필, 없으면 빈 추가 시트(graceful). 실제 시트 표시는
-            // ReminderListScreen이 scenePhase==.active에서 1회 소비한다(§4.11 소비 패턴 준용).
-            appState.pendingAddURL = SharePayload.consume()?.url
-            appState.pendingAddRequested = true
+            // 이슈2: 공유 확장에서 이미 입력(URL+시간+제목)을 받았으므로, 추가 시트 없이 Reminder를
+            // 직접 생성+예약한다(사용자 경험 "저장→끝"). 페이로드가 없으면 무시(graceful).
+            if let payload = SharePayload.consume() {
+                createReminderFromShare(payload)
+            }
         default:
             break
+        }
+    }
+
+    /// 이슈2: 공유 페이로드로 URL 알람을 직접 생성+예약(추가 시트 미오픈). 제목 비면 도메인 폴백.
+    private func createReminderFromShare(_ payload: SharePayload) {
+        Task { @MainActor in
+            let context = SharedModelContainer.shared.mainContext
+            let reminder = Reminder()
+            reminder.contentType = .url
+            reminder.targetURL = payload.url
+            let trimmedTitle = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            reminder.title = trimmedTitle.isEmpty
+                ? (URLValidation.normalizedURL(from: payload.url)?.host ?? payload.url)
+                : trimmedTitle
+            reminder.scheduledAt = payload.scheduledAt ?? Date()
+            reminder.repeatRule = payload.repeatRuleRaw.flatMap(RepeatRule.init(rawValue:)) ?? .none
+            reminder.soundType = UserDefaults.standard
+                .string(forKey: SharedConstants.UserDefaultsKey.defaultSound)
+                .flatMap(SoundType.init(rawValue:)) ?? .defaultSound
+            reminder.snoozeEnabled = true
+            reminder.snoozeMinutes = 5
+            context.insert(reminder)
+            try? context.save()
+            notificationService.reschedule(reminder)
         }
     }
 

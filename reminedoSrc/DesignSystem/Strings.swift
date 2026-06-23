@@ -169,8 +169,19 @@ enum Strings {
 
         // 인앱 lock 화면(알림 탭 진입, lock.png 재현). 자물쇠 아이콘 없음.
         static let brand = "리마인두"
-        static func snoozeButton(_ minutes: Int) -> String { "\(minutes)분 후 다시 알림" }
-        static let dismissButton = "알림 닫기"
+        // 이슈8: lock.png 시안 라벨("쿠션 다시 알림" / "알림 끄기" / "지금 보기").
+        static func snoozeButton(_ minutes: Int) -> String { "\(minutes)분 쿠션 다시 알림" }
+        static let dismissButton = "알림 끄기"
         static let openButton = "지금 보기"
+
+        // 이슈10: 포그라운드 커스텀 알림 배너(on_notice.png)의 짧은 버튼 라벨.
+        static let snoozeShort = "다시 알림"
+        static let cancelShort = "취소"
+    }
+
+    /// 이슈9: watchdog(dead-man's switch) 알림. 앱 강제종료 후 ~N분 뒤 발화.
+    enum Watchdog {
+        static let title = "앱이 꺼져 있어요"
+        static let body = "리마인두가 켜져 있어야 알람이 울려요. 알람을 놓치지 않으려면 앱을 다시 켜주세요."
     }
 }
