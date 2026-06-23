@@ -187,7 +187,7 @@ struct ReminedoWidget: Widget {
                 .containerBackground(WidgetTokens.background, for: .widget)
         }
         .configurationDisplayName("리마인두")
-        .description("오늘의 알람을 흘끗 확인해요.")
+        .description("설정한 알람을 빠르게 확인해요.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
