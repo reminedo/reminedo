@@ -16,6 +16,11 @@ import Foundation
 struct SharePayload: Codable {
     let url: String
     let sharedAt: Date
+    /// 이슈2: 공유 확장 UI에서 입력받은 추가 필드(없으면 nil — 하위호환).
+    let title: String?
+    let scheduledAt: Date?
+    /// RepeatRule.rawValue 문자열(none/daily/weekly). weekly 요일은 확장 UI에서 미지원 → none/daily만.
+    let repeatRuleRaw: String?
 
     /// App Group 공유 UserDefaults. 확장·메인 앱이 같은 suite로 접근한다(§7).
     private static var sharedDefaults: UserDefaults? {

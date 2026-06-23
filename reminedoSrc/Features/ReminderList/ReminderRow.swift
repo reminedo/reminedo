@@ -13,7 +13,6 @@ struct ReminderRow: View {
     let time: Date
     let type: ContentType
     let title: String
-    let subtitle: String?
     /// 이미지 알람 셀 썸네일(§3.2). 호출부(ReminderCell)가 ImageStore로 해소해 전달 —
     /// Row는 표현 전용이라 ImageStore를 만지지 않는다(위젯 공유 어휘 유지). nil이면 칩만 표시.
     var thumbnail: UIImage? = nil
@@ -32,10 +31,11 @@ struct ReminderRow: View {
         HStack(spacing: Tokens.Spacing.gutter) {
             leading
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
+                // 시간(상단) — 제목과 동일 폰트/사이즈(§3.2/이슈6). 부제는 미표시(home.png 최소 유지).
                 HStack(spacing: 6) {
                     Text(DateFormatting.scheduledTimeText(time))
-                        .font(.subheadline)
+                        .font(Tokens.Typography.rowPrimary.monospacedDigit())
                         .foregroundStyle(Tokens.Palette.textSecondary)
                     if showWarning {
                         warningBadge
@@ -43,20 +43,17 @@ struct ReminderRow: View {
                     // 권한 꺼짐 셀 표시: 음소거 아이콘(거짓신호 방지, §3.2/§13.1).
                     if !isEnabled {
                         Image(systemName: Tokens.Symbols.muted)
-                            .font(.caption)
+                            .font(.title3)
                             .foregroundStyle(Tokens.Palette.textSecondary)
                     }
+                    Spacer(minLength: 0)
                 }
+                // 제목(하단) — 시간과 동일 폰트/사이즈(이슈6).
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(Tokens.Typography.rowPrimary)
                     .foregroundStyle(Tokens.Palette.textPrimary)
                     .lineLimit(1)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.footnote)
-                        .foregroundStyle(Tokens.Palette.textSecondary)
-                        .lineLimit(1)
-                }
+                    .truncationMode(.tail)
             }
 
             Spacer(minLength: Tokens.Spacing.row)
@@ -140,14 +137,10 @@ struct ReminderRow: View {
         @State private var off = false
         var body: some View {
             VStack(spacing: Tokens.Spacing.row) {
-                ReminderRow(time: .now, type: .memo, title: "자기 전 스트레칭",
-                            subtitle: "일주일마다 스트레칭 10분", isOn: $on)
-                ReminderRow(time: .now, type: .url, title: "유튜브 운동 영상",
-                            subtitle: "하체 운동 루틴", isOn: $on)
-                ReminderRow(time: .now, type: .image, title: "참고 이미지",
-                            subtitle: nil, isOn: $off, dimmed: true)
-                ReminderRow(time: .now, type: .memo, title: "예약 실패 예시",
-                            subtitle: "경고 배지", isOn: $on, showWarning: true)
+                ReminderRow(time: .now, type: .memo, title: "자기 전 스트레칭", isOn: $on)
+                ReminderRow(time: .now, type: .url, title: "유튜브 운동 영상", isOn: $on)
+                ReminderRow(time: .now, type: .image, title: "참고 이미지", isOn: $off, dimmed: true)
+                ReminderRow(time: .now, type: .memo, title: "예약 실패 예시", isOn: $on, showWarning: true)
             }
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)

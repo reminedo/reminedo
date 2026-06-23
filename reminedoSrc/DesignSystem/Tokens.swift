@@ -34,6 +34,12 @@ enum Tokens {
         static let card: CGFloat = 14
     }
 
+    /// 타포그래피 토큰(단일 출처). 홈 셀 시간·제목은 동일 사이즈로 통일(이슈6).
+    enum Typography {
+        /// 홈/위젯 행의 시간·제목(동일 사이즈, §3.2/이슈6).
+        static let rowPrimary = Font.title3.weight(.semibold)
+    }
+
     enum Spacing {
         static let row: CGFloat = 12
         static let gutter: CGFloat = 16

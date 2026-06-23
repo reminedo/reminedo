@@ -26,4 +26,8 @@ final class AppState {
     /// 공유 추가 트리거가 있었음을 표시. URL 없이 reminedo://add만 와도(페이로드 없음)
     /// 빈 추가 시트를 열기 위해 pendingAddURL(nil 가능)과 분리해 둔다.
     var pendingAddRequested: Bool = false
+
+    /// 현재 울리는 알람(이슈10). 포그라운드 알람 발화 시 NotificationDelegate.willPresent가 세팅하고,
+    /// 최상위 오버레이(RootTabView)가 on_notice.png 커스텀 배너를 띄운다. nil이면 배너 숨김.
+    var ringingReminderID: UUID?
 }

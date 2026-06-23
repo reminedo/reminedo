@@ -17,6 +17,7 @@ struct ReminderListScreen: View {
     @Environment(AppState.self) private var appState
     @Environment(NotificationService.self) private var notificationService
     @Environment(DeletionManager.self) private var deletionManager
+    @Environment(SnoozeActivityController.self) private var snoozeActivity
     @Query private var reminders: [Reminder]
 
     @State private var editTarget: Reminder?
@@ -139,21 +140,40 @@ struct ReminderListScreen: View {
     }
 
     private var list: some View {
-        ScrollView {
-            LazyVStack(spacing: Tokens.Spacing.row) {
-                ForEach(sortedReminders) { reminder in
-                    ReminderCell(
-                        reminder: reminder,
-                        onTap: { editTarget = reminder },
-                        onWarningTap: { showLimitAlert = true }
-                    )
+        List {
+            ForEach(sortedReminders) { reminder in
+                ReminderCell(
+                    reminder: reminder,
+                    onTap: { editTarget = reminder },
+                    onWarningTap: { showLimitAlert = true }
+                )
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: Tokens.Spacing.gutter, bottom: 6, trailing: Tokens.Spacing.gutter))
+                .listRowBackground(Color.clear)
+                // 스와이프 삭제(이슈3): trailing 스와이프 → 기존 삭제/Undo 파이프라인 재사용(§4.3).
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        swipeDelete(reminder)
+                    } label: {
+                        Label(Strings.Edit.delete, systemName: "trash")
+                    }
                 }
             }
-            .padding(.horizontal, Tokens.Spacing.gutter)
-            .padding(.top, Tokens.Spacing.row)
-            // 마지막 셀이 탭 바에 가리지 않도록 여백 확보(§3.1).
-            .padding(.bottom, 80)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Tokens.Palette.background)
+        // 마지막 셀이 탭 바에 가리지 않도록 여백 확보(§3.1).
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// 스와이프 삭제(이슈3): pending 취소 + 스누즈 LA 종료 + 지연 삭제 큐 등록.
+    /// 기존 스낵바·commit 파이프라인(scheduleSnackbarExpiry/commitDelete)이 deletionManager
+    /// snackbarReminderID onChange로 자동 연동된다(§4.3). Undo = reschedule로 복구.
+    private func swipeDelete(_ reminder: Reminder) {
+        notificationService.cancel(reminder)
+        snoozeActivity.end(reminderID: reminder.id)
+        deletionManager.enqueue(reminder.id)
     }
 
     private var emptyState: some View {

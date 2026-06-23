@@ -201,7 +201,10 @@ final class NotificationService {
             where reminder.repeatRule == .none
                 && !reminder.schedulingFailed
                 && reminder.scheduledAt < now
-                && !pendingIDs.contains(SharedConstants.NotificationID.base(reminder.id)) {
+                && !pendingIDs.contains(SharedConstants.NotificationID.base(reminder.id))
+                // 이슈5(a): 활성 스누즈(#snooze)가 pending이면 발사된 게 아니라 스누즈 대기 중 —
+                // disable하지 않는다(홈에서 꺼짐 표시 방지).
+                && !pendingIDs.contains(SharedConstants.NotificationID.snooze(reminder.id)) {
                 reminder.isEnabled = false
                 changed = true
             }

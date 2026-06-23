@@ -20,6 +20,9 @@ nonisolated enum SharedConstants {
         static func base(_ id: UUID) -> String { id.uuidString }
         static func weekly(_ id: UUID, weekday: Int) -> String { "\(id.uuidString)#wd\(weekday)" }
         static func snooze(_ id: UUID) -> String { "\(id.uuidString)#snooze" }
+        /// 이슈9: dead-man's switch watchdog 알림 식별자. 앱이 살아있는 동안 계속 now+N으로 미루고,
+        /// 앱이 강제 종료되면 재예약이 멈춰 이 알림이 발화("앱을 다시 켜주세요").
+        static let watchdog = "reminedo.watchdog"
     }
 
     enum NotificationCategory {
