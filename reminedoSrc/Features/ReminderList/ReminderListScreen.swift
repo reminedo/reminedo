@@ -156,7 +156,7 @@ struct ReminderListScreen: View {
                     Button(role: .destructive) {
                         swipeDelete(reminder)
                     } label: {
-                        Label(Strings.Edit.delete, systemName: "trash")
+                        Label(Strings.Edit.delete, systemImage: "trash")
                     }
                     .tint(.red)
                 }
