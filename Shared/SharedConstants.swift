@@ -42,9 +42,47 @@ nonisolated enum SharedConstants {
         static let pendingImageDeletes = "pendingImageDeletes"
         static let sharedPayload = "sharedPayload"   // Share Extension이 기록하는 공유 페이로드(App Group, §4.10)
         static let defaultSound = "defaultSound"   // 신규 알람 기본 사운드(설정 §3.6). SoundType.rawValue 저장.
+        static let activeSnoozes = "activeSnoozes"
     }
 
     /// 백그라운드 복구용 BGAppRefreshTask 식별자(§9 Phase 5 후보). Info.plist
     /// `BGTaskSchedulerPermittedIdentifiers`에 동일 값을 등록해야 한다.
     static let backgroundRefreshTaskID = "com.geniusjun.reminedo.refresh"
+}
+
+enum SnoozeStateStore {
+    private static var defaults: UserDefaults? {
+        UserDefaults(suiteName: SharedConstants.appGroupID)
+    }
+
+    private static var values: [String: Double] {
+        get {
+            defaults?.dictionary(forKey: SharedConstants.UserDefaultsKey.activeSnoozes) as? [String: Double] ?? [:]
+        }
+        set {
+            defaults?.set(newValue, forKey: SharedConstants.UserDefaultsKey.activeSnoozes)
+        }
+    }
+
+    static func set(reminderID: UUID, until date: Date) {
+        var next = values
+        next[reminderID.uuidString] = date.timeIntervalSince1970
+        values = next
+    }
+
+    static func clear(reminderID: UUID) {
+        var next = values
+        next.removeValue(forKey: reminderID.uuidString)
+        values = next
+    }
+
+    static func activeUntil(reminderID: UUID, now: Date = Date()) -> Date? {
+        guard let raw = values[reminderID.uuidString] else { return nil }
+        let date = Date(timeIntervalSince1970: raw)
+        if date <= now {
+            clear(reminderID: reminderID)
+            return nil
+        }
+        return date
+    }
 }

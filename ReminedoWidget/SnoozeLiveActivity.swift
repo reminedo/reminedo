@@ -24,6 +24,7 @@ struct SnoozeLiveActivity: Widget {
             lockScreenView(context: context)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                .widgetURL(activityURL(context))
                 .activityBackgroundTint(Color.black.opacity(0.6))
                 .activitySystemActionForegroundColor(LAColor.accent)
         } dynamicIsland: { context in
@@ -70,7 +71,12 @@ struct SnoozeLiveActivity: Widget {
                 Image(systemName: "bell.fill")
                     .foregroundStyle(LAColor.accent)
             }
+            .widgetURL(activityURL(context))
         }
+    }
+
+    private func activityURL(_ context: ActivityViewContext<SnoozeActivityAttributes>) -> URL {
+        URL(string: "\(SharedConstants.urlScheme)://act/\(context.attributes.reminderID.uuidString)")!
     }
 
     @ViewBuilder

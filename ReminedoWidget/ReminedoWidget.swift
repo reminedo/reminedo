@@ -50,12 +50,7 @@ private enum WidgetSymbols {
 
 private enum RowPolicy {
     static func maxRows(for family: WidgetFamily) -> Int {
-        switch family {
-        case .systemLarge: return 5
-        case .systemMedium: return 2
-        case .systemSmall: return 1
-        default: return 2
-        }
+        2
     }
 }
 
@@ -68,6 +63,7 @@ struct ReminderItem: Identifiable {
     let contentType: ContentType
     let isEnabled: Bool
     let schedulingFailed: Bool
+    let snoozeUntil: Date?
 }
 
 struct ReminedoEntry: TimelineEntry {
@@ -124,7 +120,8 @@ struct ReminedoProvider: TimelineProvider {
                 scheduledAt: $0.scheduledAt,
                 contentType: $0.contentType,
                 isEnabled: $0.isEnabled,
-                schedulingFailed: $0.schedulingFailed
+                schedulingFailed: $0.schedulingFailed,
+                snoozeUntil: SnoozeStateStore.activeUntil(reminderID: $0.id)
             )
         }
     }
@@ -132,9 +129,9 @@ struct ReminedoProvider: TimelineProvider {
     private func dummyItems() -> [ReminderItem] {
         let now = Date.now
         return [
-            ReminderItem(id: UUID(), title: "오전 운동", scheduledAt: now, contentType: .memo, isEnabled: true, schedulingFailed: false),
-            ReminderItem(id: UUID(), title: "강의 링크 보기", scheduledAt: now, contentType: .url, isEnabled: true, schedulingFailed: false),
-            ReminderItem(id: UUID(), title: "사진 정리", scheduledAt: now, contentType: .image, isEnabled: false, schedulingFailed: false),
+            ReminderItem(id: UUID(), title: "오전 운동", scheduledAt: now, contentType: .memo, isEnabled: true, schedulingFailed: false, snoozeUntil: nil),
+            ReminderItem(id: UUID(), title: "강의 링크 보기", scheduledAt: now, contentType: .url, isEnabled: true, schedulingFailed: false, snoozeUntil: now.addingTimeInterval(300)),
+            ReminderItem(id: UUID(), title: "사진 정리", scheduledAt: now, contentType: .image, isEnabled: false, schedulingFailed: false, snoozeUntil: nil),
         ]
     }
 }
@@ -187,8 +184,8 @@ struct ReminedoWidget: Widget {
                 .containerBackground(WidgetTokens.background, for: .widget)
         }
         .configurationDisplayName("리마인두")
-        .description("설정한 알람을 빠르게 확인해요.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        description("설정한 알람을 빠르게 확인해요.")
+        .supportedFamilies([.systemMedium])
     }
 }
 
@@ -316,15 +313,21 @@ private struct RowContent: View {
                     .foregroundStyle(.yellow)
             }
 
+            if item.snoozeUntil != nil {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(WidgetTokens.accent)
+            }
+
             // 비인터랙티브 상태 표시 토글(§14.6a) — 탭 컨트롤 아님. 6b에서 AppIntent로 인터랙티브화.
-            DisplayToggle(isOn: item.isEnabled)
+            DisplayToggle(isOn: item.isEnabled || item.snoozeUntil != nil)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(WidgetTokens.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         // Off 알람은 충분히 흐림(§14.3/§14.6).
-        .opacity(isPlaceholder ? 0.5 : (item.isEnabled ? 1.0 : WidgetTokens.dimmedOpacity))
+        .opacity(isPlaceholder ? 0.5 : ((item.isEnabled || item.snoozeUntil != nil) ? 1.0 : WidgetTokens.dimmedOpacity))
         .redacted(reason: isPlaceholder ? .placeholder : [])
     }
 }
@@ -350,14 +353,14 @@ private struct DisplayToggle: View {
 
 // MARK: - Preview
 
-#Preview(as: .systemLarge) {
+#Preview(as: .systemMedium) {
     ReminedoWidget()
 } timeline: {
     ReminedoEntry(
         date: .now,
         items: [
-            ReminderItem(id: UUID(), title: "오전 운동", scheduledAt: .now, contentType: .memo, isEnabled: true, schedulingFailed: false),
-            ReminderItem(id: UUID(), title: "강의 보기", scheduledAt: .now, contentType: .url, isEnabled: false, schedulingFailed: false),
+            ReminderItem(id: UUID(), title: "오전 운동", scheduledAt: .now, contentType: .memo, isEnabled: true, schedulingFailed: false, snoozeUntil: nil),
+            ReminderItem(id: UUID(), title: "강의 보기", scheduledAt: .now, contentType: .url, isEnabled: false, schedulingFailed: false, snoozeUntil: nil),
         ],
         totalCount: 2,
         isPlaceholder: false

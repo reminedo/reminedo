@@ -494,7 +494,10 @@ struct ReminderEditSheet: View {
         Task {
             if let data = try? await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                pickedImage = image
+                await MainActor.run {
+                    pickedImage = image
+                    titleFocused = false
+                }
             }
         }
     }

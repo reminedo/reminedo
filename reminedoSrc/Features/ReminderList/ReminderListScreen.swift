@@ -88,6 +88,7 @@ struct ReminderListScreen: View {
             .onChange(of: notificationService.didJustGrantAuthorization) { _, granted in
                 if granted { presentGrantedToast() }
             }
+            .onAppear { handleSceneActive() }
             .alert(Strings.Scheduling.limitTitle, isPresented: $showLimitAlert) {
                 Button(Strings.Scheduling.limitConfirm, role: .cancel) {}
             } message: {
@@ -157,6 +158,7 @@ struct ReminderListScreen: View {
                     } label: {
                         Label(Strings.Edit.delete, systemName: "trash")
                     }
+                    .tint(.red)
                 }
             }
         }
@@ -332,6 +334,12 @@ struct ReminderListScreen: View {
         }
     }
 
+    private func swipeDelete(_ reminder: Reminder) {
+        notificationService.cancel(reminder)
+        snoozeActivity.end(reminderID: reminder.id)
+        deletionManager.enqueue(reminder.id)
+    }
+
     /// 실제 삭제 커밋: modelContext.delete + 이미지명 enqueue(Phase 3 정리) + 자동 재시도.
     private func commitDelete(_ id: UUID) {
         guard let reminder = fetch(id: id) else {
@@ -380,6 +388,59 @@ struct ReminderListScreen: View {
     }
 }
 
+private struct SwipeDeleteRow<Content: View>: View {
+    let onDelete: () -> Void
+    let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+
+    private let actionWidth: CGFloat = 92
+
+    init(onDelete: @escaping () -> Void, @ViewBuilder content: @escaping () -> Content) {
+        self.onDelete = onDelete
+        self.content = content
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Button(action: delete) {
+                Image(systemName: "trash.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: actionWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(Color.red)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            content()
+                .offset(x: offset)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12)
+                        .onChanged { value in
+                            let proposed = min(0, value.translation.width)
+                            offset = max(-actionWidth, proposed)
+                        }
+                        .onEnded { value in
+                            if value.translation.width < -actionWidth * 1.3 {
+                                delete()
+                            } else {
+                                withAnimation(.snappy) {
+                                    offset = value.translation.width < -actionWidth * 0.45 ? -actionWidth : 0
+                                }
+                            }
+                        }
+                )
+        }
+    }
+
+    private func delete() {
+        withAnimation(.snappy) { offset = 0 }
+        onDelete()
+    }
+}
+
 #Preview {
     ReminderListScreen()
         .modelContainer(for: Reminder.self, inMemory: true)
@@ -387,5 +448,6 @@ struct ReminderListScreen: View {
         .environment(NotificationService())
         .environment(DeletionManager())
         .environment(ImageStore())
+        .environment(SnoozeActivityController())
         .preferredColorScheme(.dark)
 }

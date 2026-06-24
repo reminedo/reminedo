@@ -41,6 +41,8 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         // 스누즈 알림이 울린 뒤의 응답이면 카운트다운 Live Activity는 역할을 다했으므로 종료.
         if (userInfo["isSnooze"] as? Bool) == true, let reminderId {
             snoozeActivity.end(reminderID: reminderId)
+            SnoozeStateStore.clear(reminderID: reminderId)
+            WidgetReloader.reload()
         }
 
         switch response.actionIdentifier {
@@ -83,6 +85,8 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         let reminderId = (userInfo["reminderId"] as? String).flatMap(UUID.init(uuidString:))
         if (userInfo["isSnooze"] as? Bool) == true, let reminderId {
             snoozeActivity.end(reminderID: reminderId)
+            SnoozeStateStore.clear(reminderID: reminderId)
+            WidgetReloader.reload()
         }
         // 이슈10: 포그라운드 알람 발화 → 커스텀 배너 표시(시스템 배너와 함께).
         // 소리·반복진동은 살아있는 AlarmAudioService가 풀볼륨 담당 — 여기선 1회 보조 진동만(이슈7).

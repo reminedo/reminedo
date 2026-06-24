@@ -78,8 +78,10 @@ struct ReminedoApp: App {
             switch phase {
             case .background:
                 BackgroundRefreshManager.schedule()
+                WatchdogScheduler.schedule()
                 alarmAudio.startKeepAlive()
             case .active:
+                WatchdogScheduler.cancel()
                 snoozeActivity.endExpired()
                 notificationService.disableFiredOneShots()
                 alarmAudio.stop()
