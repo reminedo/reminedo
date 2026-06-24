@@ -6,6 +6,7 @@
 //  않도록 UI보다 먼저 앱 시작 시 delegate로 등록한다. 소비는 scenePhase==.active에서 1회.
 //
 
+import AudioToolbox
 import Foundation
 import UserNotifications
 
@@ -72,19 +73,26 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 포그라운드 표시(§4.5): 배너 + 사운드. 스누즈 알림이 포그라운드에서 울리면
-    /// 카운트다운 Live Activity를 종료한다(역할 종료).
+    /// 포그라운드 표시(§4.5). 이슈5(b)/10: 시스템 배너를 유지하되, 동시에 on_notice.png 커스텀 배너도
+    /// 띄우도록 appState.ringingReminderID를 세팅한다(최상위 오버레이가 관찰). 스누즈 알림이 포그라운드에서
+    /// 울리면 카운트다운 Live Activity를 종료하고, 커스텀 배너가 재등장한다(이슈5-b 해소).
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
-        if (userInfo["isSnooze"] as? Bool) == true,
-           let reminderId = (userInfo["reminderId"] as? String).flatMap(UUID.init(uuidString:)) {
+        let reminderId = (userInfo["reminderId"] as? String).flatMap(UUID.init(uuidString:))
+        if (userInfo["isSnooze"] as? Bool) == true, let reminderId {
             snoozeActivity.end(reminderID: reminderId)
             SnoozeStateStore.clear(reminderID: reminderId)
             WidgetReloader.reload()
+        }
+        // 이슈10: 포그라운드 알람 발화 → 커스텀 배너 표시(시스템 배너와 함께).
+        // 소리·반복진동은 살아있는 AlarmAudioService가 풀볼륨 담당 — 여기선 1회 보조 진동만(이슈7).
+        if let reminderId {
+            appState.ringingReminderID = reminderId
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         }
         completionHandler([.banner, .sound])
     }

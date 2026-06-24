@@ -25,7 +25,6 @@ struct ReminderCell: View {
                 time: reminder.scheduledAt,
                 type: reminder.contentType,
                 title: reminder.title,
-                subtitle: subtitle,
                 thumbnail: thumbnail,
                 thumbnailBroken: thumbnailBroken,
                 isOn: $reminder.isEnabled,
@@ -39,25 +38,6 @@ struct ReminderCell: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    /// 부제(§3.2): 메모→텍스트 미리보기, URL→linkTitle(없으면 도메인). 이미지는 Phase 3 — nil.
-    private var subtitle: String? {
-        switch reminder.contentType {
-        case .memo:
-            guard let memo = reminder.memo?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !memo.isEmpty else { return nil }
-            return memo
-        case .url:
-            // linkTitle 우선, 없으면 URL의 도메인(host). 셀엔 썸네일 없음(home.png).
-            if let title = reminder.linkTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !title.isEmpty {
-                return title
-            }
-            return URLValidation.normalizedURL(from: reminder.targetURL ?? "")?.host
-        case .image:
-            return nil   // 이미지 알람은 부제 없음(§3.2)
-        }
     }
 
     /// 이미지 알람 셀 썸네일(§3.2/§4.7): ImageStore의 다운샘플 캐시에서 해소. 풀 이미지 미로드.

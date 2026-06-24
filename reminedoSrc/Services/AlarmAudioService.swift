@@ -15,6 +15,7 @@
 //
 
 import AVFoundation
+import AudioToolbox
 import Foundation
 import SwiftData
 
@@ -29,6 +30,10 @@ final class AlarmAudioService {
     private var alarmPlayer: AVAudioPlayer?
     private var fireTimer: DispatchSourceTimer?
     private var autoStopWork: DispatchWorkItem?
+    /// 이슈7: 알람 울리는 동안 반복 진동 타이머.
+    private var vibrationTimer: DispatchSourceTimer?
+    /// 이슈9: 백그라운드 동안 watchdog를 주기 재예약하는 타이머(앱 사망 시 미예약 → 발화).
+    private var watchdogTimer: DispatchSourceTimer?
 
     /// 타이머가 무엇을 위해 걸렸는지(발사 시 어느 알람/스누즈인지 식별).
     private var scheduledFire: (id: UUID, date: Date, isSnooze: Bool)?
@@ -60,6 +65,7 @@ final class AlarmAudioService {
         guard nearestFire() != nil else { stop(); return }
         startSilence()
         scheduleNextFire()
+        startWatchdog()   // 이슈9: 백그라운드 동안 watchdog 주기 재예약.
     }
 
     /// 포그라운드 진입/알람 없음: 전부 정지 + 세션 비활성. pendingSnooze(in-memory)는 유지.
@@ -67,6 +73,12 @@ final class AlarmAudioService {
         fireTimer?.cancel(); fireTimer = nil
         scheduledFire = nil
         autoStopWork?.cancel(); autoStopWork = nil
+        stopVibration()   // 이슈7
+        stopWatchdog()    // 이슈9: 백그라운드 주기 타이머 정지.
+        // 이슈9: 포그라운드(=살아있음)에선 watchdog가 발화하면 안 된다 — pending도 함께 제거.
+        // (clearDelivered는 전환 직전 이미 도달한 것 정리; cancel은 남은 예약 제거.)
+        WatchdogScheduler.cancel()
+        WatchdogScheduler.clearDelivered()
         alarmPlayer?.stop(); alarmPlayer = nil
         silencePlayer?.stop(); silencePlayer = nil
         isRinging = false
@@ -79,6 +91,7 @@ final class AlarmAudioService {
     /// 풀볼륨 정지(취소·지금보기·autoStop). 무음 keep-alive는 유지하고 다음 알람을 다시 건다.
     func stopRinging() {
         alarmPlayer?.stop(); alarmPlayer = nil
+        stopVibration()   // 이슈7
         isRinging = false
         ringingReminderID = nil
         autoStopWork?.cancel(); autoStopWork = nil
@@ -88,10 +101,17 @@ final class AlarmAudioService {
     /// 다시 알림: 풀볼륨 정지 + minutes 뒤 재발사 등록(오디오). UN 재예약·LA 갱신은 호출부가 처리.
     func snooze(reminderID: UUID, minutes: Int) {
         alarmPlayer?.stop(); alarmPlayer = nil
+        stopVibration()   // 이슈7
         isRinging = false
         autoStopWork?.cancel(); autoStopWork = nil
         ringingReminderID = nil
         pendingSnooze = (reminderID, Date().addingTimeInterval(TimeInterval(max(1, minutes) * 60)))
+        // 이슈5(a): 일회성 알람이 fireAlarm(:122)에서 isEnabled=false로 꺼졌어도, 스누즈 대기 중엔
+        // 홈이 켜짐으로 표시되도록 재활성화. (스누즈 종료 후엔 disableFiredOneShots가 다시 정리.)
+        if let reminder = fetch(id: reminderID), !reminder.isEnabled {
+            reminder.isEnabled = true
+            try? modelContext.save()
+        }
         if silencePlayer != nil { scheduleNextFire() }   // keep-alive 중이면 즉시, 아니면 다음 startKeepAlive가 픽업
     }
 
@@ -113,6 +133,7 @@ final class AlarmAudioService {
         // .silent 알람은 풀볼륨 미재생(UN이 무음 처리). 기본음 알람만 큰 소리로 울린다.
         if reminder?.soundType == .defaultSound {
             playAlarm()
+            startVibration()   // 이슈7: 소리와 함께 반복 진동.
             isRinging = true
             ringingReminderID = fire.id
             scheduleAutoStop()
@@ -197,6 +218,45 @@ final class AlarmAudioService {
         }
         autoStopWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + autoStopAfter, execute: work)
+    }
+
+    // MARK: - 진동(이슈7)
+
+    /// 알람 울리는 동안 ~1.5s 간격 반복 진동. 무음모드에서도 진동으로 알람 인지.
+    private func startVibration() {
+        vibrationTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: 1.5)
+        timer.setEventHandler {
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        }
+        timer.resume()
+        vibrationTimer = timer
+    }
+
+    private func stopVibration() {
+        vibrationTimer?.cancel(); vibrationTimer = nil
+    }
+
+    // MARK: - watchdog(이슈9, dead-man's switch)
+
+    /// 백그라운드 동안 watchdog 알림을 주기 재예약. 앱이 죽으면 이 타이머가 멈추고,
+    /// 마지막으로 예약한 watchdog가 ~N분 뒤 발화("앱을 다시 켜주세요").
+    private func startWatchdog() {
+        watchdogTimer?.cancel()
+        WatchdogScheduler.reschedule()   // 즉시 1회 밀어두기.
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        let period = max(60, TimeInterval(WatchdogScheduler.intervalMinutes * 60) - 60) // 만료 직전에 갱신
+        timer.schedule(deadline: .now() + period, repeating: period)
+        timer.setEventHandler {
+            WatchdogScheduler.reschedule()
+        }
+        timer.resume()
+        watchdogTimer = timer
+    }
+
+    private func stopWatchdog() {
+        watchdogTimer?.cancel(); watchdogTimer = nil
     }
 
     // MARK: - 내부: 인터럽션/리셋 복구

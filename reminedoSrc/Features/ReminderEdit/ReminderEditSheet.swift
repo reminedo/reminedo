@@ -42,7 +42,10 @@ struct ReminderEditSheet: View {
     @State private var imageFileName: String?
     @State private var photoItem: PhotosPickerItem?
     @State private var showImageViewer = false
+    /// 미리보기 캐시(이슈4): currentImage computed를 대체. body 재평가마다 디스크 I/O·UIImage 재생성을 막아
+    /// 제목 TextField 포커스(First Responder) 안정화. pickedImage/imageFileName 변경 시 한 번만 로드.
     @State private var loadedPreviewImage: UIImage?
+    /// 제목 포커스(이슈4): PhotosPicker dismiss 후에도 탭으로 first responder 진입을 보장.
     @FocusState private var titleFocused: Bool
     @State private var time: Date
 
@@ -196,6 +199,7 @@ struct ReminderEditSheet: View {
                 if selectedType == .url, !urlText.isEmpty {
                     previewService.fetch(urlText)
                 }
+                // 이슈4: 편집 모드 기존 이미지 1회 로드(cachedPreview).
                 reloadPreview()
             }
             .onChange(of: pickedImage) { _, _ in reloadPreview() }
@@ -279,6 +283,8 @@ struct ReminderEditSheet: View {
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
+                // 이슈4: PhotosPicker dismiss 후 탭 포커스 진입 보장. FocusState 바인딩으로
+                // First Responder 관리를 명시화(추가 보강: 탭 시 강제 진입).
                 .onTapGesture { titleFocused = true }
         }
     }
@@ -470,6 +476,9 @@ struct ReminderEditSheet: View {
         }
     }
 
+    /// 미리보기 이미지 갱신(이슈4): pickedImage 우선, 없으면 imageFileName(편집 모드)을 디스크에서 1회 로드해
+    /// @State에 캐싱. body 재평가마다 disk I/O/UIImage 재생성하던 currentImage computed를 대체해
+    /// 미리보기 뷰 identity 교란 → 제목 TextField 포커스 상실을 막는다.
     private func reloadPreview() {
         if let pickedImage {
             loadedPreviewImage = pickedImage

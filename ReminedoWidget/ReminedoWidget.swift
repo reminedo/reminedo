@@ -139,7 +139,21 @@ struct ReminedoProvider: TimelineProvider {
 // MARK: - 시간 포맷(로컬 헬퍼 — 앱 DateFormatting 미의존, §C)
 
 private enum WidgetTime {
-    /// "오전/오후 H:MM"(§14.1).
+    /// "H:MM"(widget.png 큰 시간 텍스트).
+    static func clockString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "h:mm"
+        return formatter.string(from: date)
+    }
+    /// "오전/오후"(widget.png 시간 아래 작은 표시).
+    static func ampmString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "a"
+        return formatter.string(from: date)
+    }
+    /// "오전/오후 H:MM"(레거시 통합 — 빈 상태 등에서 사용).
     static func string(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
@@ -170,7 +184,7 @@ struct ReminedoWidget: Widget {
                 .containerBackground(WidgetTokens.background, for: .widget)
         }
         .configurationDisplayName("리마인두")
-        .description("오늘의 알람을 흘끗 확인해요.")
+        description("설정한 알람을 빠르게 확인해요.")
         .supportedFamilies([.systemMedium])
     }
 }
@@ -199,18 +213,19 @@ struct ReminedoWidgetView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Image(systemName: WidgetSymbols.header)
-                .foregroundStyle(WidgetTokens.accent)
-            Text("리마인두")
-                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(WidgetTokens.textPrimary)
+            Text("알람 목록")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(WidgetTokens.accent)
             Spacer()
         }
     }
 
     @ViewBuilder
     private var rows: some View {
-        // 표시 행: 초과 시 마지막 한 칸을 "+N개 더"로 대체(§14.3).
-        let overflow = entry.totalCount > maxRows
+        // 표시 행: 초과 시 마지막 한 칸을 "+N개 더"로 대체(§14.3). 다만 systemSmall(maxRows=1)은
+        // 칸이 1개뿐이라 overflow가 유일한 행을 잠식하므로, Small은 항상 첫 알람 1개를 보여준다.
+        let overflow = entry.totalCount > maxRows && maxRows > 1
         let visibleCount = overflow ? maxRows - 1 : min(entry.items.count, maxRows)
         let visible = Array(entry.items.prefix(max(visibleCount, 0)))
 
@@ -266,19 +281,28 @@ private struct RowContent: View {
     let isPlaceholder: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(isPlaceholder ? "오전 0:00" : WidgetTime.string(from: item.scheduledAt))
-                .font(.caption.weight(.medium).monospacedDigit())
-                .foregroundStyle(isPlaceholder ? WidgetTokens.textSecondary : WidgetTokens.textPrimary)
+        HStack(spacing: 10) {
+            // widget.png: 큰 초록 시간 + 그 아래 작은 AM/PM.
+            VStack(alignment: .leading, spacing: 0) {
+                Text(isPlaceholder ? "0:00" : WidgetTime.clockString(from: item.scheduledAt))
+                    .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(WidgetTokens.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(isPlaceholder ? "오전" : WidgetTime.ampmString(from: item.scheduledAt))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(WidgetTokens.accent.opacity(0.85))
+            }
 
             Image(systemName: WidgetSymbols.icon(for: item.contentType))
-                .font(.caption)
-                .foregroundStyle(WidgetTokens.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(WidgetTokens.textPrimary)
 
             Text(item.title)
-                .font(.caption)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(WidgetTokens.textPrimary)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             Spacer(minLength: 4)
 
@@ -299,7 +323,7 @@ private struct RowContent: View {
             DisplayToggle(isOn: item.isEnabled || item.snoozeUntil != nil)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(WidgetTokens.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         // Off 알람은 충분히 흐림(§14.3/§14.6).

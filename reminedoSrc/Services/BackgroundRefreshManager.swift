@@ -42,6 +42,7 @@ enum BackgroundRefreshManager {
         }
         notificationService.retryFailedScheduling()
         notificationService.rescheduleAllEnabled()
+        WatchdogScheduler.reschedule()   // 이슈9: 백그라운드 보조 틱 — watchdog도 계속 미루기.
         // 내부 Task가 비동기로 진행되므로 즉시 완료 신호(best-effort, 복구는 fire-and-forget).
         task.setTaskCompleted(success: true)
     }
