@@ -22,6 +22,7 @@ struct ReminderEditSheet: View {
     /// 공유 진입 프리필 URL(§2.3/§4.10). nil이면 기존 추가/수정 동작 그대로.
     /// 설정 시 .url 세그먼트 선택 + urlText 채움 → 기존 Phase 2 미리보기 fetch·제목 자동채움이 트리거된다.
     private let prefillURL: String?
+    private let prefillImageImportFileName: String?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -41,7 +42,6 @@ struct ReminderEditSheet: View {
     @State private var pickedImage: UIImage?
     @State private var imageFileName: String?
     @State private var photoItem: PhotosPickerItem?
-    @State private var showImageViewer = false
     /// 미리보기 캐시(이슈4): currentImage computed를 대체. body 재평가마다 디스크 I/O·UIImage 재생성을 막아
     /// 제목 TextField 포커스(First Responder) 안정화. pickedImage/imageFileName 변경 시 한 번만 로드.
     @State private var loadedPreviewImage: UIImage?
@@ -63,16 +63,18 @@ struct ReminderEditSheet: View {
     @State private var showDiscardConfirm = false
     @State private var showDeleteConfirm = false
 
-    init(mode: Mode, prefillURL: String? = nil) {
+    init(mode: Mode, prefillURL: String? = nil, prefillImageImportFileName: String? = nil) {
         self.mode = mode
         self.prefillURL = prefillURL
+        self.prefillImageImportFileName = prefillImageImportFileName
 
         switch mode {
         case .add:
             // 새 알람 기본값(§3.3): 시각=현재 시각 분 올림, 타입=메모, 반복=안 함, 사운드=기본,
             //   다시 알림=On·5분. 단, 공유 프리필 URL이 있으면 타입=.url + urlText 프리필(§2.3/§4.10).
             let defaultTime = Self.roundedUpToMinute(.now)
-            let prefilledType: ContentType = (prefillURL != nil) ? .url : .memo
+            let importedImage = Self.loadSharedImportImage(named: prefillImageImportFileName)
+            let prefilledType: ContentType = (importedImage != nil) ? .image : ((prefillURL != nil) ? .url : .memo)
             let prefilledURLText = prefillURL ?? ""
             // 신규 알람 기본 사운드는 설정(§3.6)에서 정한 전역 기본값을 따른다. 미설정 시 .defaultSound.
             let defaultSound = Self.defaultSoundSetting()
@@ -80,6 +82,7 @@ struct ReminderEditSheet: View {
             _title = State(initialValue: "")
             _memo = State(initialValue: "")
             _urlText = State(initialValue: prefilledURLText)
+            _pickedImage = State(initialValue: importedImage)
             _imageFileName = State(initialValue: nil)
             _time = State(initialValue: defaultTime)
             _repeatRule = State(initialValue: .none)
@@ -100,6 +103,7 @@ struct ReminderEditSheet: View {
             _title = State(initialValue: reminder.title)
             _memo = State(initialValue: memo)
             _urlText = State(initialValue: urlText)
+            _pickedImage = State(initialValue: nil)
             _imageFileName = State(initialValue: imageFileName)
             _time = State(initialValue: reminder.scheduledAt)
             _repeatRule = State(initialValue: reminder.repeatRule)
@@ -212,23 +216,6 @@ struct ReminderEditSheet: View {
                 Button(Strings.Edit.deleteConfirm, role: .destructive) { deleteReminder() }
                 Button(Strings.Edit.deleteCancel, role: .cancel) {}
             }
-            // 저장된/선택한 이미지 읽기전용 풀스크린(§3.3/§13.6). 닫으면 편집 상태 그대로 복귀.
-            .fullScreenCover(isPresented: $showImageViewer) {
-                imageViewerCover
-            }
-        }
-    }
-
-    /// 미리보기용 풀스크린: 새로 고른 이미지면 그대로, 기존 저장본이면 파일명으로 로드한다.
-    @ViewBuilder
-    private var imageViewerCover: some View {
-        if let pickedImage {
-            ImageActionView(preloaded: pickedImage, onClose: { showImageViewer = false })
-        } else if let imageFileName {
-            ImageActionView(fileName: imageFileName, onClose: { showImageViewer = false })
-        } else {
-            Color.black.ignoresSafeArea()
-                .onAppear { showImageViewer = false }
         }
     }
 
@@ -436,19 +423,15 @@ struct ReminderEditSheet: View {
                 .foregroundStyle(Tokens.Palette.textSecondary)
 
             if let preview = loadedPreviewImage {
-                // 선택/기존 이미지 미리보기 — 탭하면 읽기전용 풀스크린(§3.3).
-                Button {
-                    showImageViewer = true
-                } label: {
-                    Image(uiImage: preview)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
-                        .clipped()
-                }
-                .buttonStyle(.plain)
+                // 선택/기존 이미지 미리보기(읽기전용). 풀스크린 없이 미리보기만 노출한다 —
+                // 탭 타깃을 없애 제목 입력 탭이 풀스크린으로 새는 문제를 차단한다.
+                Image(uiImage: preview)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
+                    .clipped()
             } else {
                 Text(Strings.Edit.imagePickHint)
                     .font(.footnote)
@@ -680,6 +663,7 @@ struct ReminderEditSheet: View {
             reminder.targetURL = nil
             reminder.linkTitle = nil
         }
+        reminder.isEnabled = true
         reminder.scheduledAt = time
         reminder.repeatRule = repeatRule
         // weekly가 아니면 마스크를 0으로 정규화(stale 비트 방지).
@@ -724,6 +708,20 @@ struct ReminderEditSheet: View {
     }
 
     /// 폐기 가드 비교용 스냅샷.
+    private static func loadSharedImportImage(named fileName: String?) -> UIImage? {
+        guard let fileName, !fileName.isEmpty,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedConstants.appGroupID)
+        else { return nil }
+        let url = container
+            .appendingPathComponent("shared-imports", isDirectory: true)
+            .appendingPathComponent(fileName, isDirectory: false)
+        let image = UIImage(contentsOfFile: url.path)
+        if image != nil {
+            try? FileManager.default.removeItem(at: url)
+        }
+        return image
+    }
+
     private struct Snapshot {
         let selectedType: ContentType
         let title: String

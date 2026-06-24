@@ -81,6 +81,12 @@ struct RootTabView: View {
         .onChange(of: alarmAudio.isRinging) { _, ringing in
             if !ringing { appState.ringingReminderID = nil }
         }
+        .onChange(of: appState.pendingAddRequested) { _, requested in
+            if requested { selection = .reminders }
+        }
+        .onAppear {
+            if appState.pendingAddRequested { selection = .reminders }
+        }
     }
 
     @ViewBuilder

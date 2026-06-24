@@ -2,103 +2,121 @@
 //  ShareViewController.swift
 //  ReminedoShare
 //
-//  공유 시트 → 리마인두 익스텐션(§2.3/§4.10, 이슈2 재설계). 공유된 URL을 추출해
-//  **확장 내 간단 추가 화면**(URL 자동 채움 + 제목 + 시간 + 반복 + 저장)을 띄운다.
-//  저장 시 App Group에 {url, sharedAt, title, scheduledAt, repeatRuleRaw} JSON을 기록하고
-//  reminedo://add 로 메인 앱을 깨워 Reminder를 직접 생성+예약하게 한다(추가 시트 미오픈, "저장→끝").
-//
-//  ※ 단일 출처 SharedConstants를 확장은 공유하지 않아 필요한 값만 로컬 정의(App Group/스킴 일치 필수).
-//    페이로드 스키마는 메인 앱 SharePayload(Codable, .secondsSince1970)와 정확히 합의된다.
-//    다중 공유 시 첫 URL만 사용, 미지원 시 안내 후 종료.
+//  The share extension only imports shared content and opens the main app.
+//  Reminder creation, validation, scheduling, and widget refresh stay in the app.
 //
 
 import UIKit
-import SwiftUI
 import UniformTypeIdentifiers
 
 final class ShareViewController: UIViewController {
-
-    // MARK: - 로컬 상수(메인 앱 SharedConstants와 값 동기 필수)
     private enum Local {
         static let appGroupID = "group.com.geniusjun.reminedo"
         static let payloadKey = "sharedPayload"
         static let addURL = "reminedo://add"
+        static let importDirectoryName = "shared-imports"
     }
 
-    // MARK: - 로컬 카피(메인 앱 Strings.Share와 동기)
     private enum Copy {
-        static let multiple = "첫 번째 링크만 저장됐어요."
-        static let unsupported = "URL을 리마인두에 저장할 수 없어요."
+        static let unsupported = "URL 또는 사진을 리마인두에 추가할 수 없어요."
     }
-
-    /// 추출된 공유 URL(화면 표시·저장용). nil이면 미지원 안내.
-    private var extractedURL: String?
-    private var isMultiple = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        extractAndHandle()
+        view.backgroundColor = .clear
+        extractAndOpenApp()
     }
 
-    // MARK: - 추출
-
-    /// inputItems → NSItemProvider에서 web URL(public.url)을 우선 추출하고, 없으면 텍스트에서
-    /// 첫 http(s) 링크를 추출한다(유튜브 등은 URL을 텍스트로 공유). 추출 후 폼 표시.
-    private func extractAndHandle() {
+    private func extractAndOpenApp() {
         let providers = (extensionContext?.inputItems as? [NSExtensionItem])?
             .compactMap { $0.attachments }
             .flatMap { $0 } ?? []
 
-        let urlProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }
-
-        if let firstProvider = urlProviders.first {
-            isMultiple = urlProviders.count > 1
-            firstProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
-                guard let self else { return }
-                let url: URL?
-                switch item {
-                case let value as URL: url = value
-                case let value as String: url = URL(string: value)
-                default: url = nil
-                }
-                DispatchQueue.main.async {
-                    self.handleExtracted(url: url)
-                }
-            }
+        if let urlProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }) {
+            loadURL(from: urlProvider)
             return
         }
 
-        // web URL이 없으면 텍스트에서 링크 추출 시도(유튜브 앱 공유 등).
         if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
-            textProvider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
-                guard let self else { return }
-                let url = (item as? String).flatMap(Self.firstURL(in:))
-                DispatchQueue.main.async {
-                    self.handleExtracted(url: url)
-                }
-            }
+            loadTextURL(from: textProvider)
             return
         }
 
-        // 공유 항목 중 web URL·텍스트 링크가 모두 없으면 미지원 안내 후 종료.
+        if let imageProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) {
+            loadImage(from: imageProvider)
+            return
+        }
+
         presentNoticeThenFinish(Copy.unsupported)
     }
 
-    /// 추출된 URL을 검증해 폼을 띄우거나 미지원 안내.
-    private func handleExtracted(url: URL?) {
+    private func loadURL(from provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            let url: URL?
+            switch item {
+            case let value as URL:
+                url = value
+            case let value as String:
+                url = URL(string: value)
+            default:
+                url = nil
+            }
+            DispatchQueue.main.async {
+                self.handle(url: url)
+            }
+        }
+    }
+
+    private func loadTextURL(from provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            let url = (item as? String).flatMap(Self.firstURL(in:))
+            DispatchQueue.main.async {
+                self.handle(url: url)
+            }
+        }
+    }
+
+    private func loadImage(from provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            guard let data = Self.imageData(from: item),
+                  let fileName = self.saveImportedImage(data)
+            else {
+                DispatchQueue.main.async { self.presentNoticeThenFinish(Copy.unsupported) }
+                return
+            }
+            DispatchQueue.main.async {
+                guard self.persist(payload: [
+                    "contentTypeRaw": "image",
+                    "imageFileName": fileName,
+                    "sharedAt": Date().timeIntervalSince1970
+                ]) else {
+                    self.presentNoticeThenFinish(Copy.unsupported)
+                    return
+                }
+                self.openMainAppThenFinish()
+            }
+        }
+    }
+
+    private func handle(url: URL?) {
         guard let url, url.scheme == "http" || url.scheme == "https" else {
             presentNoticeThenFinish(Copy.unsupported)
             return
         }
-        extractedURL = url.absoluteString
-        if isMultiple {
-            // 다중 공유: 첫 URL로 진행하되 안내 토스트는 저장 후 노출(여기선 플래그만 유지).
+        guard persist(payload: [
+            "contentTypeRaw": "url",
+            "url": url.absoluteString,
+            "sharedAt": Date().timeIntervalSince1970
+        ]) else {
+            presentNoticeThenFinish(Copy.unsupported)
+            return
         }
-        presentForm()
+        openMainAppThenFinish()
     }
 
-    /// 텍스트에서 첫 http(s) 링크를 NSDataDetector로 추출한다.
     private static func firstURL(in text: String) -> URL? {
         if let direct = URL(string: text), direct.scheme == "http" || direct.scheme == "https" {
             return direct
@@ -108,80 +126,80 @@ final class ShareViewController: UIViewController {
         return detector?.firstMatch(in: text, options: [], range: range)?.url
     }
 
-    // MARK: - 추가 폼(SwiftUI)
-
-    /// 확장 내 간단 추가 화면을 UIHostingController로 표시한다(URL 자동 채움).
-    private func presentForm() {
-        guard let url = extractedURL else {
-            presentNoticeThenFinish(Copy.unsupported)
-            return
+    private static func imageData(from item: NSSecureCoding?) -> Data? {
+        switch item {
+        case let image as UIImage:
+            return image.jpegData(compressionQuality: 0.92)
+        case let data as Data:
+            return UIImage(data: data)?.jpegData(compressionQuality: 0.92)
+        case let url as URL:
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)?.jpegData(compressionQuality: 0.92)
+        default:
+            return nil
         }
-
-        let form = ShareAddForm(
-            url: url,
-            multipleNotice: isMultiple ? Copy.multiple : nil,
-            onSave: { [weak self] title, scheduledAt, repeatRuleRaw in
-                self?.persist(url: url, title: title, scheduledAt: scheduledAt, repeatRuleRaw: repeatRuleRaw)
-                self?.openMainApp()
-                self?.finish()
-            },
-            onCancel: { [weak self] in
-                self?.cancel()
-            }
-        )
-        let host = UIHostingController(rootView: form)
-        addChild(host)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(host.view)
-        NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        host.didMove(toParent: self)
     }
 
-    // MARK: - 저장(App Group)
+    private func saveImportedImage(_ data: Data) -> String? {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Local.appGroupID) else {
+            return nil
+        }
+        let directory = container.appendingPathComponent(Local.importDirectoryName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-    /// { url, sharedAt, title?, scheduledAt?, repeatRuleRaw? } JSON Data를 App Group UserDefaults에 기록.
-    /// 메인 앱 SharePayload가 .secondsSince1970 로 디코딩하므로 날짜는 epoch seconds(Double)로 인코딩.
-    private func persist(url: String, title: String?, scheduledAt: Date?, repeatRuleRaw: String?) {
-        var payload: [String: Any] = [
-            "url": url,
-            "sharedAt": Date().timeIntervalSince1970
-        ]
-        if let title { payload["title"] = title }
-        if let scheduledAt { payload["scheduledAt"] = scheduledAt.timeIntervalSince1970 }
-        if let repeatRuleRaw { payload["repeatRuleRaw"] = repeatRuleRaw }
+        let fileName = "\(UUID().uuidString).jpg"
+        let url = directory.appendingPathComponent(fileName, isDirectory: false)
+        do {
+            try data.write(to: url, options: .atomic)
+            return fileName
+        } catch {
+            return nil
+        }
+    }
+
+    private func persist(payload: [String: Any]) -> Bool {
         guard
             let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
             let defaults = UserDefaults(suiteName: Local.appGroupID)
-        else { return }
+        else { return false }
         defaults.set(data, forKey: Local.payloadKey)
-        defaults.synchronize()
+        return defaults.synchronize()
     }
 
-    // MARK: - 메인 앱 호출
+    private func openMainAppThenFinish() {
+        guard let url = URL(string: Local.addURL) else {
+            finish()
+            return
+        }
+        // Share extension에서 호스트 앱 열기: extensionContext.open(_:)은 iOS/기기에 따라 무시되는
+        // 경우가 있어, responder chain을 타고 UIApplication을 찾아 직접 open한다(널리 쓰이는 우회책).
+        openURLViaResponderChain(url)
+        // open은 비동기로 앱을 띄우므로 약간 늦춰 종료한다 — 즉시 finish()하면 앱 전환이 끊길 수 있다.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.finish()
+        }
+    }
 
-    /// reminedo://add로 메인 앱을 깨운다. 확장은 UIApplication.shared를 쓸 수 없어
-    /// extensionContext.open(_:)을 사용한다(best-effort).
-    private func openMainApp() {
-        guard let url = URL(string: Local.addURL) else { return }
+    private func openURLViaResponderChain(_ url: URL) {
+        // open(_:options:completionHandler:)은 확장 타깃(APPLICATION_EXTENSION_API_ONLY)에서
+        // 직접 호출이 막히므로, selector로 우회해 UIApplication의 openURL:을 perform한다.
+        let selector = NSSelectorFromString("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector) {
+                current.perform(selector, with: url)
+                return
+            }
+            responder = current.next
+        }
+        // responder chain에서 처리자를 못 찾으면 기존 경로로 폴백.
         extensionContext?.open(url, completionHandler: nil)
     }
-
-    // MARK: - 종료
 
     private func finish() {
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 
-    private func cancel() {
-        extensionContext?.cancelRequest(withError: NSError(domain: "ReminedoShare", code: -1))
-    }
-
-    /// 간단한 안내 알럿을 띄운 뒤 종료한다.
     private func presentNoticeThenFinish(_ message: String) {
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default) { [weak self] _ in
@@ -189,99 +207,4 @@ final class ShareViewController: UIViewController {
         })
         present(alert, animated: true)
     }
-}
-
-// MARK: - SwiftUI 추가 폼
-
-/// 공유 확장 내 간단 추가 화면(이슈2). URL 자동 채움 + 제목 + 시간 + 반복(none/daily) + 저장/취소.
-private struct ShareAddForm: View {
-    let url: String
-    let multipleNotice: String?
-    let onSave: (String?, Date, String?) -> Void
-    let onCancel: () -> Void
-
-    @State private var title: String = ""
-    @State private var time: Date = Date()
-    @State private var repeatsDaily: Bool = false
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let multipleNotice {
-                        Label(multipleNotice, systemImage: "info.circle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("링크")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Text(url)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("제목")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        TextField("알림에 표시될 제목", text: $title)
-                            .textFieldStyle(.plain)
-                            .padding(12)
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("알림 시간")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        DatePicker("알림 시간", selection: $time, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "ko_KR"))
-                            .frame(maxWidth: .infinity)
-                    }
-
-                    Toggle("매일 반복", isOn: $repeatsDaily)
-                        .padding(.vertical, 4)
-                }
-                .padding(16)
-            }
-            .background(Color(.systemBackground))
-            .navigationTitle("리마인두")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("취소") { onCancel() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("저장") {
-                        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(
-                            trimmed.isEmpty ? nil : trimmed,
-                            time,
-                            repeatsDaily ? RepeatRule.daily.rawValue : RepeatRule.none.rawValue
-                        )
-                    }
-                    .bold()
-                }
-            }
-        }
-        // Share Extension에서 공유 enum(RepeatRule) 접근이 불가하므로 rawValue 문자열 리터럴로 폴백.
-        // (아래 RepeatRule은 확장 로컬 정의 — 메인 앱 RepeatRule.rawValue와 동일 문자열이어야 함.)
-    }
-}
-
-/// 확장 로컬 RepeatRule(메인 앱 RepeatRule.rawValue "none"/"daily"/"weekly"와 동일).
-private enum RepeatRule: String {
-    case none = "none"
-    case daily = "daily"
 }

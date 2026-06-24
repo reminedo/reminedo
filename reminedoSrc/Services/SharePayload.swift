@@ -3,20 +3,22 @@
 //  reminedo
 //
 //  Share Extension이 App Group에 기록하는 공유 페이로드(§4.10). 메인 앱은 reminedo://add
-//  수신 시 이걸 읽어(소비·삭제) 추가 시트를 URL 프리필로 연다(§2.3). Foundation만 의존한다.
+//  수신 시 이걸 읽어(소비·삭제) 추가 시트를 URL/사진 프리필로 연다(§2.3). Foundation만 의존한다.
 //
 //  페이로드 형식(확장과 합의된 단일 스키마):
 //    App Group UserDefaults 키 "sharedPayload"에 JSON Data 1건.
-//    JSON 객체 { "url": String, "sharedAt": Double(epoch seconds) }.
+//    JSON 객체 { "contentTypeRaw": String, "url"?: String, "imageFileName"?: String, "sharedAt": Double(epoch seconds) }.
 //    인코딩/디코딩은 .secondsSince1970 날짜 전략으로 양쪽이 동일하게 맞춘다.
 //
 
 import Foundation
 
 struct SharePayload: Codable {
-    let url: String
+    let contentTypeRaw: String?
+    let url: String?
+    let imageFileName: String?
     let sharedAt: Date
-    /// 이슈2: 공유 확장 UI에서 입력받은 추가 필드(없으면 nil — 하위호환).
+    /// 예전 공유 확장 UI에서 입력받던 추가 필드(없으면 nil — 하위호환).
     let title: String?
     let scheduledAt: Date?
     /// RepeatRule.rawValue 문자열(none/daily/weekly). weekly 요일은 확장 UI에서 미지원 → none/daily만.
