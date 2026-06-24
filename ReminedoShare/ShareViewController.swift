@@ -5,6 +5,10 @@
 //  The share extension only imports shared content and opens the main app.
 //  Reminder creation, validation, scheduling, and widget refresh stay in the app.
 //
+//  추출은 견고성을 위해 다단 폴백을 둔다: URL provider는 loadItem → loadObject(URL) → 콘텐츠
+//  텍스트(attributedContentText) 순으로 시도한다(YouTube처럼 loadItem이 실패/빈값을 주는 소스 대응).
+//  실패 메시지는 단계별로 분리해 어느 지점에서 막혔는지 화면에서 바로 구분되게 한다.
+//
 
 import UIKit
 import UniformTypeIdentifiers
@@ -17,8 +21,13 @@ final class ShareViewController: UIViewController {
         static let importDirectoryName = "shared-imports"
     }
 
+    /// 실패 단계별 메시지(진단용). 어느 가지에서 막혔는지 디바이스에서 바로 구분된다.
     private enum Copy {
-        static let unsupported = "URL 또는 사진을 리마인두에 추가할 수 없어요."
+        static let noContent = "공유할 URL이나 사진을 찾지 못했어요. (콘텐츠 없음)"
+        static let urlLoadFailed = "링크를 불러오지 못했어요. (URL 로드 실패)"
+        static let badURL = "지원하지 않는 링크예요. (http/https만 가능)"
+        static let imageFailed = "사진을 불러오지 못했어요. (이미지 로드 실패)"
+        static let saveFailed = "저장에 실패했어요. (앱 그룹 저장 실패)"
     }
 
     override func viewDidLoad() {
@@ -47,23 +56,39 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        presentNoticeThenFinish(Copy.unsupported)
+        // 폴백: attachment provider가 없으면 NSExtensionItem.attributedContentText에서 URL 검출.
+        if let url = firstURLFromContentText() {
+            handle(url: url)
+            return
+        }
+
+        presentNoticeThenFinish(Copy.noContent)
     }
+
+    // MARK: - URL 로드 (loadItem → loadObject → 콘텐츠 텍스트 폴백)
 
     private func loadURL(from provider: NSItemProvider) {
         provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
             guard let self else { return }
-            let url: URL?
-            switch item {
-            case let value as URL:
-                url = value
-            case let value as String:
-                url = URL(string: value)
-            default:
-                url = nil
+            if let url = Self.url(from: item) {
+                DispatchQueue.main.async { self.handle(url: url) }
+            } else {
+                // loadItem이 nil/예상 밖 타입 → loadObject(URL)로 재시도.
+                self.loadURLViaObject(from: provider)
             }
+        }
+    }
+
+    private func loadURLViaObject(from provider: NSItemProvider) {
+        // loadObject는 provider가 URL을 못 주면 completion에 nil/에러를 주므로 canLoadObject 가드 없이 안전.
+        _ = provider.loadObject(ofClass: URL.self) { [weak self] url, _ in
+            guard let self else { return }
             DispatchQueue.main.async {
-                self.handle(url: url)
+                if let url {
+                    self.handle(url: url)
+                } else {
+                    self.fallbackToContentTextOrFail()
+                }
             }
         }
     }
@@ -71,12 +96,39 @@ final class ShareViewController: UIViewController {
     private func loadTextURL(from provider: NSItemProvider) {
         provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
             guard let self else { return }
-            let url = (item as? String).flatMap(Self.firstURL(in:))
+            let textURL = (item as? String).flatMap(Self.firstURL(in:))
             DispatchQueue.main.async {
-                self.handle(url: url)
+                if let url = textURL ?? self.firstURLFromContentText() {
+                    self.handle(url: url)
+                } else {
+                    self.presentNoticeThenFinish(Copy.urlLoadFailed)
+                }
             }
         }
     }
+
+    /// loadItem/loadObject가 모두 실패했을 때 마지막으로 콘텐츠 텍스트에서 URL을 찾는다.
+    private func fallbackToContentTextOrFail() {
+        if let url = firstURLFromContentText() {
+            handle(url: url)
+        } else {
+            presentNoticeThenFinish(Copy.urlLoadFailed)
+        }
+    }
+
+    /// NSExtensionItem.attributedContentText(제목/본문 텍스트)에서 첫 http(s) URL을 검출한다.
+    private func firstURLFromContentText() -> URL? {
+        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        for item in items {
+            if let text = item.attributedContentText?.string,
+               let url = Self.firstURL(in: text) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    // MARK: - 이미지 로드
 
     private func loadImage(from provider: NSItemProvider) {
         provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, _ in
@@ -84,7 +136,7 @@ final class ShareViewController: UIViewController {
             guard let data = Self.imageData(from: item),
                   let fileName = self.saveImportedImage(data)
             else {
-                DispatchQueue.main.async { self.presentNoticeThenFinish(Copy.unsupported) }
+                DispatchQueue.main.async { self.presentNoticeThenFinish(Copy.imageFailed) }
                 return
             }
             DispatchQueue.main.async {
@@ -93,7 +145,7 @@ final class ShareViewController: UIViewController {
                     "imageFileName": fileName,
                     "sharedAt": Date().timeIntervalSince1970
                 ]) else {
-                    self.presentNoticeThenFinish(Copy.unsupported)
+                    self.presentNoticeThenFinish(Copy.saveFailed)
                     return
                 }
                 self.openMainAppThenFinish()
@@ -101,9 +153,11 @@ final class ShareViewController: UIViewController {
         }
     }
 
+    // MARK: - 저장 + 앱 열기
+
     private func handle(url: URL?) {
         guard let url, url.scheme == "http" || url.scheme == "https" else {
-            presentNoticeThenFinish(Copy.unsupported)
+            presentNoticeThenFinish(Copy.badURL)
             return
         }
         guard persist(payload: [
@@ -111,10 +165,27 @@ final class ShareViewController: UIViewController {
             "url": url.absoluteString,
             "sharedAt": Date().timeIntervalSince1970
         ]) else {
-            presentNoticeThenFinish(Copy.unsupported)
+            presentNoticeThenFinish(Copy.saveFailed)
             return
         }
         openMainAppThenFinish()
+    }
+
+    // MARK: - 파싱 헬퍼
+
+    /// loadItem이 돌려주는 다양한 표현(URL/NSURL/String/Data)을 URL로 정규화한다.
+    private static func url(from item: NSSecureCoding?) -> URL? {
+        switch item {
+        case let value as URL:
+            return value
+        case let value as String:
+            return URL(string: value)
+        case let value as Data:
+            return URL(dataRepresentation: value, relativeTo: nil)
+                ?? String(data: value, encoding: .utf8).flatMap(URL.init(string:))
+        default:
+            return nil
+        }
     }
 
     private static func firstURL(in text: String) -> URL? {
@@ -163,7 +234,7 @@ final class ShareViewController: UIViewController {
             let defaults = UserDefaults(suiteName: Local.appGroupID)
         else { return false }
         defaults.set(data, forKey: Local.payloadKey)
-        return defaults.synchronize()
+        return true
     }
 
     private func openMainAppThenFinish() {

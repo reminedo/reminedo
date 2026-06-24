@@ -2,7 +2,7 @@
 //  SettingsScreen.swift
 //  reminedo
 //
-//  설정 탭(§3.6). grouped List · 다크. 권한 상태/기본 사운드/동작 안내/앱 정보/데이터 삭제.
+//  설정 탭(§3.6). grouped List · 다크. 권한 상태/동작 안내/앱 정보/데이터 삭제.
 //  서비스(NotificationService·ImageStore)는 환경 주입을 그대로 쓰고(thin view, fat service),
 //  사운드 기본값·플래그는 UserDefaults(@AppStorage)로 둔다. 온보딩 플래그는 데이터 삭제에서 유지한다.
 //
@@ -20,19 +20,10 @@ struct SettingsScreen: View {
 
     @State private var showDeleteConfirm = false
 
-    /// @AppStorage(String) ↔ SoundType 브리지(세그먼트 Picker 바인딩용).
-    private var defaultSound: Binding<SoundType> {
-        Binding(
-            get: { SoundType(rawValue: defaultSoundRaw) ?? .defaultSound },
-            set: { defaultSoundRaw = $0.rawValue }
-        )
-    }
-
     var body: some View {
         NavigationStack {
             List {
                 permissionSection
-                soundSection
                 behaviorSection
                 infoSection
                 dataSection
@@ -77,25 +68,7 @@ struct SettingsScreen: View {
         }
     }
 
-    // MARK: - 2. 기본 사운드
-
-    private var soundSection: some View {
-        Section {
-            Picker(Strings.Settings.soundSection, selection: defaultSound) {
-                Text(Strings.Edit.soundDefault).tag(SoundType.defaultSound)
-                Text(Strings.Edit.soundSilent).tag(SoundType.silent)
-            }
-            .pickerStyle(.segmented)
-            .foregroundStyle(Tokens.Palette.textPrimary)
-        } header: {
-            Text(Strings.Settings.soundSection)
-        } footer: {
-            Text(Strings.Settings.soundFooter)
-        }
-        .listRowBackground(Tokens.Palette.card)
-    }
-
-    // MARK: - 3. 알림 동작 안내
+    // MARK: - 2. 알림 동작 안내
 
     private var behaviorSection: some View {
         Section(Strings.Settings.behaviorSection) {
@@ -110,7 +83,7 @@ struct SettingsScreen: View {
         .listRowBackground(Tokens.Palette.card)
     }
 
-    // MARK: - 4. 앱 정보
+    // MARK: - 3. 앱 정보
 
     private var infoSection: some View {
         Section(Strings.Settings.infoSection) {
@@ -133,7 +106,7 @@ struct SettingsScreen: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
 
-    // MARK: - 5. 데이터 삭제
+    // MARK: - 4. 데이터 삭제
 
     private var dataSection: some View {
         Section(Strings.Settings.dataSection) {

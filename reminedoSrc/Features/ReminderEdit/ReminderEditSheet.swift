@@ -42,6 +42,9 @@ struct ReminderEditSheet: View {
     @State private var pickedImage: UIImage?
     @State private var imageFileName: String?
     @State private var photoItem: PhotosPickerItem?
+    /// PhotosPicker가 닫힌 뒤 제목 TextField의 first responder가 막히는 iOS 이슈 대응용 재생성 키(.id).
+    /// 사진 선택 시 갱신해 필드를 재생성하면 탭-포커스가 복구된다(텍스트는 $title로 보존).
+    @State private var titleFieldID = UUID()
     /// 미리보기 캐시(이슈4): currentImage computed를 대체. body 재평가마다 디스크 I/O·UIImage 재생성을 막아
     /// 제목 TextField 포커스(First Responder) 안정화. pickedImage/imageFileName 변경 시 한 번만 로드.
     @State private var loadedPreviewImage: UIImage?
@@ -270,9 +273,9 @@ struct ReminderEditSheet: View {
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
-                // 이슈4: PhotosPicker dismiss 후 탭 포커스 진입 보장. FocusState 바인딩으로
-                // First Responder 관리를 명시화(추가 보강: 탭 시 강제 진입).
-                .onTapGesture { titleFocused = true }
+                // PhotosPicker가 닫힌 뒤 first responder가 막히는 iOS 이슈 대응: 사진 선택 시 이 id가
+                // 갱신되며 필드를 재생성해 네이티브 탭-포커스를 복구한다(텍스트는 $title로 보존).
+                .id(titleFieldID)
         }
     }
 
@@ -479,7 +482,8 @@ struct ReminderEditSheet: View {
                let image = UIImage(data: data) {
                 await MainActor.run {
                     pickedImage = image
-                    titleFocused = false
+                    // 사진 선택 직후 제목 필드를 재생성해 PhotosPicker 이후 포커스 막힘을 푼다.
+                    titleFieldID = UUID()
                 }
             }
         }

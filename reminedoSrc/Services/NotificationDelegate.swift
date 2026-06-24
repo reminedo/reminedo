@@ -73,9 +73,9 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 포그라운드 표시(§4.5). 이슈5(b)/10: 시스템 배너를 유지하되, 동시에 on_notice.png 커스텀 배너도
-    /// 띄우도록 appState.ringingReminderID를 세팅한다(최상위 오버레이가 관찰). 스누즈 알림이 포그라운드에서
-    /// 울리면 카운트다운 Live Activity를 종료하고, 커스텀 배너가 재등장한다(이슈5-b 해소).
+    /// 포그라운드 표시(§4.5). 앱을 사용 중(포그라운드)일 때 알람이 울리면 커스텀 배너(on_notice) 대신
+    /// 인앱 lock 화면으로 직행한다(pendingRoute=.act). 스누즈 알림이 포그라운드에서 울리면 카운트다운
+    /// Live Activity를 종료한다. (백그라운드에선 willPresent가 안 불려 시스템 알림만 뜬다.)
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -88,12 +88,12 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             SnoozeStateStore.clear(reminderID: reminderId)
             WidgetReloader.reload()
         }
-        // 이슈10: 포그라운드 알람 발화 → 커스텀 배너 표시(시스템 배너와 함께).
-        // 소리·반복진동은 살아있는 AlarmAudioService가 풀볼륨 담당 — 여기선 1회 보조 진동만(이슈7).
+        // 포그라운드(앱 사용 중) 알람 발화 → 커스텀 배너 대신 인앱 lock 화면으로 직행.
+        // 전체화면 lock이 뜨므로 시스템 배너는 생략하고 소리만 재생, 보조 진동 1회(이슈7).
         if let reminderId {
-            appState.ringingReminderID = reminderId
+            appState.pendingRoute = .act(reminderId)
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         }
-        completionHandler([.banner, .sound])
+        completionHandler([.sound])
     }
 }
