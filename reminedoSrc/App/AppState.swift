@@ -22,6 +22,7 @@ final class AppState {
     /// 페이로드를 소비해 여기 담고, ReminderListScreen이 scenePhase==.active에서 1회 소비한다.
     /// nil이면 빈 추가 시트(graceful).
     var pendingAddURL: String?
+    var pendingAddImageImportFileName: String?
 
     /// 공유 추가 트리거가 있었음을 표시. URL 없이 reminedo://add만 와도(페이로드 없음)
     /// 빈 추가 시트를 열기 위해 pendingAddURL(nil 가능)과 분리해 둔다.

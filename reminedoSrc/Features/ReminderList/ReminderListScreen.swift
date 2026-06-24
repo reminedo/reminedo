@@ -32,6 +32,7 @@ struct ReminderListScreen: View {
 
     /// 공유 진입 시 추가 시트에 넣을 프리필 URL(§2.3/§4.10). showingAdd와 함께 소비된다.
     @State private var addPrefillURL: String?
+    @State private var addPrefillImageImportFileName: String?
 
     /// 정렬은 §3.2 시·분 기준(nextFireDate 아님). 지연 삭제 대기 알람은 목록에서 숨긴다(§4.3).
     private var sortedReminders: [Reminder] {
@@ -59,7 +60,11 @@ struct ReminderListScreen: View {
             // 커스텀 헤더(home.png: "알림"+"+" 동일선상)를 쓰므로 네비바는 숨긴다.
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAdd, onDismiss: consumePendingAfterSheetClose) {
-                ReminderEditSheet(mode: .add, prefillURL: addPrefillURL)
+                ReminderEditSheet(
+                    mode: .add,
+                    prefillURL: addPrefillURL,
+                    prefillImageImportFileName: addPrefillImageImportFileName
+                )
             }
             .sheet(item: $editTarget, onDismiss: consumePendingAfterSheetClose) { reminder in
                 ReminderEditSheet(mode: .edit(reminder))
@@ -127,6 +132,8 @@ struct ReminderListScreen: View {
                 .foregroundStyle(Tokens.Palette.textPrimary)
             Spacer()
             Button {
+                addPrefillURL = nil
+                addPrefillImageImportFileName = nil
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
@@ -295,6 +302,8 @@ struct ReminderListScreen: View {
     /// 한 시트가 닫히자마자 다른 시트를 같은 런루프에 띄우면 SwiftUI가 표시를 놓칠 수 있어
     /// add는 즉시, edit은 다음 틱으로 흘려 충돌을 피한다.
     private func consumePendingAfterSheetClose() {
+        addPrefillURL = nil
+        addPrefillImageImportFileName = nil
         consumePendingAddIfNeeded()
         DispatchQueue.main.async { consumePendingEditIfNeeded() }
     }
@@ -310,7 +319,9 @@ struct ReminderListScreen: View {
         // 시트 작성 중이면 보류(트리거 플래그 유지) — 닫힐 때 onDismiss에서 재호출된다.
         guard !showingAdd, editTarget == nil else { return }
         addPrefillURL = appState.pendingAddURL
+        addPrefillImageImportFileName = appState.pendingAddImageImportFileName
         appState.pendingAddURL = nil
+        appState.pendingAddImageImportFileName = nil
         appState.pendingAddRequested = false
         showingAdd = true
     }

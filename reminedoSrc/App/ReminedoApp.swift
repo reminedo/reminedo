@@ -95,46 +95,25 @@ struct ReminedoApp: App {
         guard url.scheme == SharedConstants.urlScheme else { return }
         switch url.host {
         case "act":
-            // Live Activity "지금 보기" → 콘텐츠 직행(lock 화면 생략, §오디오 알람).
+            // 스누즈 카운트다운 Live Activity 탭 → 알림 본문 탭과 동일하게 인앱 lock 화면(.act)으로.
+            // lock 화면에서 "다시 알림"을 누르면 다시 스누즈가 걸리고 새 카운트다운이 떠 반복 가능하다.
             if let last = url.pathComponents.last, let uuid = UUID(uuidString: last) {
-                appState.pendingRoute = .actContent(uuid)
+                appState.pendingRoute = .act(uuid)
             }
         case "edit":
             if let last = url.pathComponents.last, let uuid = UUID(uuidString: last) {
                 appState.pendingRoute = .edit(uuid)
             }
         case "add":
-            // 이슈2: 공유 확장에서 이미 입력(URL+시간+제목)을 받았으므로, 추가 시트 없이 Reminder를
-            // 직접 생성+예약한다(사용자 경험 "저장→끝"). 페이로드가 없으면 무시(graceful).
+            // 공유 확장에서 가져온 URL/사진을 메인 앱의 알림 추가 시트로 넘긴다.
+            // 실제 저장, 검증, 예약은 앱의 기존 생성 흐름을 그대로 사용한다.
             if let payload = SharePayload.consume() {
-                createReminderFromShare(payload)
+                appState.pendingAddURL = payload.url
+                appState.pendingAddImageImportFileName = payload.imageFileName
             }
+            appState.pendingAddRequested = true
         default:
             break
-        }
-    }
-
-    /// 이슈2: 공유 페이로드로 URL 알람을 직접 생성+예약(추가 시트 미오픈). 제목 비면 도메인 폴백.
-    private func createReminderFromShare(_ payload: SharePayload) {
-        Task { @MainActor in
-            let context = SharedModelContainer.shared.mainContext
-            let reminder = Reminder()
-            reminder.contentType = .url
-            reminder.targetURL = payload.url
-            let trimmedTitle = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            reminder.title = trimmedTitle.isEmpty
-                ? (URLValidation.normalizedURL(from: payload.url)?.host ?? payload.url)
-                : trimmedTitle
-            reminder.scheduledAt = payload.scheduledAt ?? Date()
-            reminder.repeatRule = payload.repeatRuleRaw.flatMap(RepeatRule.init(rawValue:)) ?? .none
-            reminder.soundType = UserDefaults.standard
-                .string(forKey: SharedConstants.UserDefaultsKey.defaultSound)
-                .flatMap(SoundType.init(rawValue:)) ?? .defaultSound
-            reminder.snoozeEnabled = true
-            reminder.snoozeMinutes = 5
-            context.insert(reminder)
-            try? context.save()
-            notificationService.reschedule(reminder)
         }
     }
 

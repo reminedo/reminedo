@@ -45,7 +45,7 @@ struct LockScreenActionView: View {
                 .foregroundStyle(Color.white.opacity(0.82))
 
             Text(DateFormatting.lockClockText(scheduledAt))
-                .font(.system(size: 92, weight: .bold, design: .rounded))
+                .font(.system(size: 108, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .minimumScaleFactor(0.72)
@@ -56,10 +56,11 @@ struct LockScreenActionView: View {
 
     private var identityBlock: some View {
         VStack(spacing: 16) {
-            Image("NotificationBell")
+            Image("AppLogo")
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: 142, height: 142)
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                 .accessibilityHidden(true)
 
             Text(Strings.Action.brand)
