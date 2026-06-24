@@ -78,7 +78,7 @@ struct ReminedoApp: App {
             switch phase {
             case .background:
                 BackgroundRefreshManager.schedule()
-                WatchdogScheduler.schedule()
+                WatchdogScheduler.reschedule()
                 alarmAudio.startKeepAlive()
             case .active:
                 WatchdogScheduler.cancel()

@@ -334,12 +334,6 @@ struct ReminderListScreen: View {
         }
     }
 
-    private func swipeDelete(_ reminder: Reminder) {
-        notificationService.cancel(reminder)
-        snoozeActivity.end(reminderID: reminder.id)
-        deletionManager.enqueue(reminder.id)
-    }
-
     /// 실제 삭제 커밋: modelContext.delete + 이미지명 enqueue(Phase 3 정리) + 자동 재시도.
     private func commitDelete(_ id: UUID) {
         guard let reminder = fetch(id: id) else {
