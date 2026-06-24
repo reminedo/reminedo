@@ -118,6 +118,7 @@ final class ShareViewController: UIViewController {
             let defaults = UserDefaults(suiteName: Local.appGroupID)
         else { return }
         defaults.set(data, forKey: Local.payloadKey)
+        defaults.synchronize()
     }
 
     // MARK: - 메인 앱 호출

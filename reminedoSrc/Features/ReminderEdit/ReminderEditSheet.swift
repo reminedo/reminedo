@@ -42,6 +42,8 @@ struct ReminderEditSheet: View {
     @State private var imageFileName: String?
     @State private var photoItem: PhotosPickerItem?
     @State private var showImageViewer = false
+    @State private var loadedPreviewImage: UIImage?
+    @FocusState private var titleFocused: Bool
     @State private var time: Date
 
     // URL 미리보기는 시트 로컬(전역 주입 아님) — 시트 수명과 함께 산다(§4.9).
@@ -194,7 +196,10 @@ struct ReminderEditSheet: View {
                 if selectedType == .url, !urlText.isEmpty {
                     previewService.fetch(urlText)
                 }
+                reloadPreview()
             }
+            .onChange(of: pickedImage) { _, _ in reloadPreview() }
+            .onChange(of: imageFileName) { _, _ in reloadPreview() }
             .confirmationDialog(Strings.Edit.discardTitle, isPresented: $showDiscardConfirm, titleVisibility: .visible) {
                 Button(Strings.Edit.discardConfirm, role: .destructive) { dismiss() }
                 Button(Strings.Edit.discardCancel, role: .cancel) {}
@@ -268,11 +273,13 @@ struct ReminderEditSheet: View {
                 .font(.footnote)
                 .foregroundStyle(Tokens.Palette.textSecondary)
             TextField(Strings.Edit.titlePlaceholder, text: $title)
+                .focused($titleFocused)
                 .textFieldStyle(.plain)
                 .padding(Tokens.Spacing.row)
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
+                .onTapGesture { titleFocused = true }
         }
     }
 
@@ -422,7 +429,7 @@ struct ReminderEditSheet: View {
                 .font(.footnote)
                 .foregroundStyle(Tokens.Palette.textSecondary)
 
-            if let preview = currentImage {
+            if let preview = loadedPreviewImage {
                 // 선택/기존 이미지 미리보기 — 탭하면 읽기전용 풀스크린(§3.3).
                 Button {
                     showImageViewer = true
@@ -448,7 +455,7 @@ struct ReminderEditSheet: View {
             PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
                 HStack(spacing: 6) {
                     Image(systemName: Tokens.Symbols.image)
-                    Text(currentImage == nil ? Strings.Edit.imagePick : Strings.Edit.imageChange)
+                    Text(loadedPreviewImage == nil ? Strings.Edit.imagePick : Strings.Edit.imageChange)
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Tokens.Palette.accent)
@@ -463,11 +470,14 @@ struct ReminderEditSheet: View {
         }
     }
 
-    /// 미리보기/저장 대상 이미지: 새로 고른 게 있으면 우선, 없으면 기존 저장본을 로드.
-    private var currentImage: UIImage? {
-        if let pickedImage { return pickedImage }
-        if let imageFileName { return imageStore.loadImage(named: imageFileName) }
-        return nil
+    private func reloadPreview() {
+        if let pickedImage {
+            loadedPreviewImage = pickedImage
+        } else if let imageFileName {
+            loadedPreviewImage = imageStore.loadImage(named: imageFileName)
+        } else {
+            loadedPreviewImage = nil
+        }
     }
 
     private func loadPickedImage(_ item: PhotosPickerItem?) {
@@ -475,7 +485,10 @@ struct ReminderEditSheet: View {
         Task {
             if let data = try? await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                pickedImage = image
+                await MainActor.run {
+                    pickedImage = image
+                    titleFocused = false
+                }
             }
         }
     }

@@ -13,6 +13,7 @@
 
 import Foundation
 import BackgroundTasks
+import UserNotifications
 
 enum BackgroundRefreshManager {
     private static let identifier = SharedConstants.backgroundRefreshTaskID
@@ -43,5 +44,24 @@ enum BackgroundRefreshManager {
         notificationService.rescheduleAllEnabled()
         // 내부 Task가 비동기로 진행되므로 즉시 완료 신호(best-effort, 복구는 fire-and-forget).
         task.setTaskCompleted(success: true)
+    }
+}
+
+enum WatchdogScheduler {
+    private static let identifier = "watchdog.reopen"
+
+    static func schedule() {
+        let content = UNMutableNotificationContent()
+        content.title = "앱을 다시 켜주세요"
+        content.body = "리마인두가 켜져 있어야 알림을 더 안정적으로 놓치지 않아요."
+        content.sound = nil
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 90, repeats: false)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    static func cancel() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
     }
 }

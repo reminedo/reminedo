@@ -40,6 +40,8 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         // 스누즈 알림이 울린 뒤의 응답이면 카운트다운 Live Activity는 역할을 다했으므로 종료.
         if (userInfo["isSnooze"] as? Bool) == true, let reminderId {
             snoozeActivity.end(reminderID: reminderId)
+            SnoozeStateStore.clear(reminderID: reminderId)
+            WidgetReloader.reload()
         }
 
         switch response.actionIdentifier {
@@ -81,6 +83,8 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         if (userInfo["isSnooze"] as? Bool) == true,
            let reminderId = (userInfo["reminderId"] as? String).flatMap(UUID.init(uuidString:)) {
             snoozeActivity.end(reminderID: reminderId)
+            SnoozeStateStore.clear(reminderID: reminderId)
+            WidgetReloader.reload()
         }
         completionHandler([.banner, .sound])
     }

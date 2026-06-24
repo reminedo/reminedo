@@ -81,6 +81,7 @@ final class NotificationService {
     /// id로 reminder를 다시 조회해(컨텍스트 일관) 재예약. 삭제됐으면 취소만 남는다.
     private func rescheduleAsync(reminderID: UUID) async {
         await cancelAsync(idPrefix: reminderID.uuidString)
+        SnoozeStateStore.clear(reminderID: reminderID)
 
         guard let reminder = fetch(id: reminderID) else { return }
 
@@ -154,6 +155,8 @@ final class NotificationService {
     /// 수정 시 진행 중 스누즈(#snooze)도 prefix 매칭으로 함께 취소된다(§4.2 의도).
     func cancel(_ reminder: Reminder) {
         let prefix = reminder.id.uuidString
+        SnoozeStateStore.clear(reminderID: reminder.id)
+        WidgetReloader.reload()
         Task { await cancelAsync(idPrefix: prefix) }
     }
 
@@ -201,7 +204,8 @@ final class NotificationService {
             where reminder.repeatRule == .none
                 && !reminder.schedulingFailed
                 && reminder.scheduledAt < now
-                && !pendingIDs.contains(SharedConstants.NotificationID.base(reminder.id)) {
+                && !pendingIDs.contains(SharedConstants.NotificationID.base(reminder.id))
+                && !pendingIDs.contains(SharedConstants.NotificationID.snooze(reminder.id)) {
                 reminder.isEnabled = false
                 changed = true
             }
@@ -240,12 +244,16 @@ final class NotificationService {
                 timeInterval: TimeInterval(reminder.snoozeMinutes * 60),
                 repeats: false
             )
+            let fireDate = Date().addingTimeInterval(TimeInterval(reminder.snoozeMinutes * 60))
             let request = UNNotificationRequest(
                 identifier: SharedConstants.NotificationID.snooze(reminderId),
                 content: content(for: reminder, isSnooze: true),
                 trigger: trigger
             )
-            _ = await add(request)
+            if await add(request) {
+                SnoozeStateStore.set(reminderID: reminderId, until: fireDate)
+                WidgetReloader.reload()
+            }
         }
     }
 
@@ -269,7 +277,6 @@ final class NotificationService {
         content.threadIdentifier = threadIdentifier(for: reminder)
         // Time Sensitive(§4.5/§1): 무음·집중 모드를 (허용된 경우) 뚫고 울리게 한다.
         // 프로덕션: Time Sensitive 엔타이틀먼트(com.apple.developer.usernotifications.time-sensitive) 필요.
-        content.interruptionLevel = .timeSensitive
         return content
     }
 
