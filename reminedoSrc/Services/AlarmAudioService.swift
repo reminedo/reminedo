@@ -17,7 +17,9 @@
 import AVFoundation
 import AudioToolbox
 import Foundation
+import MediaPlayer
 import SwiftData
+import UIKit
 
 @MainActor
 @Observable
@@ -46,6 +48,28 @@ final class AlarmAudioService {
     /// 사용자가 앱을 안 열면 무한 재생되는 것 방지(분 단위).
     private let autoStopAfter: TimeInterval = 5 * 60
 
+    // MARK: - 볼륨 부스트(알라미 방식)
+    // 무음 스위치는 .playback 세션이 이미 뚫지만, 사용자가 미디어 볼륨을 낮춰뒀으면 작게 난다.
+    // 발사 시 시스템 미디어 볼륨을 최대로 끌어올리고(부스트), 종료 시 원래 값으로 복원한다.
+    // 시스템 볼륨 쓰기는 MPVolumeView의 내부 슬라이더가 유일한 공개 경로(슬라이더는 윈도 계층에 있어야 동작).
+    // ※ 한계: 백그라운드 윈도 비활성 시 슬라이더 쓰기가 무동작일 수 있음(실기기 검증 필요, best-effort).
+    // ※ force-quit 안전: 부스트 직전 원래 볼륨을 UserDefaults에도 저장 → 복원 못 하고 죽어도
+    //   다음 실행(.active → stop → restoreSystemVolume)에서 잔존 값으로 복구한다.
+
+    /// 화면 밖·투명으로 부착하는 볼륨 제어용 뷰. subview의 UISlider로 시스템 미디어 볼륨을 조작한다.
+    /// (@Observable 매크로는 lazy 저장 프로퍼티를 추적할 수 없어 관찰 대상에서 제외.)
+    @ObservationIgnored private lazy var volumeView: MPVolumeView = {
+        let view = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
+        view.alpha = 0.001
+        view.isUserInteractionEnabled = false
+        return view
+    }()
+    /// 부스트 직전 시스템 볼륨(복원용). 부스트 중에만 값을 보유한다.
+    private var savedSystemVolume: Float?
+    /// 페이드인: 플레이어 상대 볼륨을 이 값에서 1.0까지 fadeInDuration 동안 끌어올린다.
+    private let fadeInStartVolume: Float = 0.1
+    private let fadeInDuration: TimeInterval = 5
+
     private init() {
         // 관찰자는 .main 큐에서 실행된다 → MainActor.assumeIsolated로 동기 처리(self 캡처 없이 shared 참조).
         let nc = NotificationCenter.default
@@ -60,10 +84,32 @@ final class AlarmAudioService {
 
     // MARK: - keep-alive 생명주기 (scenePhase에서 호출)
 
+    /// 런치 시 호출: 이전 세션이 부스트 중 강제종료돼 사용자 볼륨이 최대로 잔존하면 원래 값으로 복구.
+    /// (.active onChange는 cold launch 초기값엔 안 fire될 수 있어 별도 진입점이 필요하다.)
+    func recoverBoostedVolumeIfNeeded() {
+        guard savedSystemVolume == nil, persistedBoostVolume() != nil else { return }
+        // 사용자가 force-quit 후 직접 볼륨을 바꿨거나(현재값이 부스트값에서 벗어남), 부스트가 애초에
+        // 시스템 볼륨을 못 올렸으면 강제 되돌릴 필요가 없다 → persisted만 정리하고 종료.
+        let live = AVAudioSession.sharedInstance().outputVolume
+        guard live >= 0.95 else { clearPersistedBoostVolume(); return }
+        retryRecovery(attemptsLeft: 5)   // cold launch 직후 슬라이더 미준비 대비 짧은 재시도.
+    }
+
+    /// 잔존 볼륨 복구를 슬라이더가 준비될 때까지 짧게 재시도(0.3s 간격). 성공하면 persisted가 비워져 중단.
+    private func retryRecovery(attemptsLeft: Int) {
+        guard persistedBoostVolume() != nil, attemptsLeft > 0 else { return }
+        restoreSystemVolume()
+        guard persistedBoostVolume() != nil else { return }   // 복구 성공 → 종료.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            MainActor.assumeIsolated { AlarmAudioService.shared.retryRecovery(attemptsLeft: attemptsLeft - 1) }
+        }
+    }
+
     /// 백그라운드 진입 시: 미래 발사가 있으면 무음 루프 시작 + 다음 발사 타이머. 없으면 정지.
     func startKeepAlive() {
         guard nearestFire() != nil else { stop(); return }
         startSilence()
+        ensureVolumeViewInHierarchy()   // 발사 전 미리 부착해 백그라운드 발사 시 슬라이더가 준비되도록.
         scheduleNextFire()
         startWatchdog()   // 이슈9: 백그라운드 동안 watchdog 주기 재예약.
     }
@@ -79,6 +125,7 @@ final class AlarmAudioService {
         // (clearDelivered는 전환 직전 이미 도달한 것 정리; cancel은 남은 예약 제거.)
         WatchdogScheduler.cancel()
         WatchdogScheduler.clearDelivered()
+        restoreSystemVolume()   // 부스트했었다면 원래 시스템 볼륨으로 복원.
         alarmPlayer?.stop(); alarmPlayer = nil
         silencePlayer?.stop(); silencePlayer = nil
         isRinging = false
@@ -92,6 +139,7 @@ final class AlarmAudioService {
     func stopRinging() {
         alarmPlayer?.stop(); alarmPlayer = nil
         stopVibration()   // 이슈7
+        restoreSystemVolume()   // 부스트 복원.
         isRinging = false
         ringingReminderID = nil
         autoStopWork?.cancel(); autoStopWork = nil
@@ -102,6 +150,7 @@ final class AlarmAudioService {
     func snooze(reminderID: UUID, minutes: Int) {
         alarmPlayer?.stop(); alarmPlayer = nil
         stopVibration()   // 이슈7
+        restoreSystemVolume()   // 부스트 복원(다음 발사 때 다시 부스트).
         isRinging = false
         autoStopWork?.cancel(); autoStopWork = nil
         ringingReminderID = nil
@@ -173,11 +222,78 @@ final class AlarmAudioService {
         configureSession(solo: true)   // 무음모드·잠금 관통, 단독 점유
         guard let url = Bundle.main.url(forResource: "alarm", withExtension: "caf"),
               let player = try? AVAudioPlayer(contentsOf: url) else { return }
+        boostSystemVolume()   // 시스템 미디어 볼륨 최대로(원래 값 저장). 재생 확정 후에만 부스트.
         player.numberOfLoops = -1
-        player.volume = 1.0
+        player.volume = fadeInStartVolume   // 페이드인 시작점(작게 시작).
         player.prepareToPlay()
         player.play()
+        player.setVolume(1.0, fadeDuration: fadeInDuration)   // fadeInDuration 동안 풀볼륨까지 부드럽게 상승.
         alarmPlayer = player
+    }
+
+    // MARK: - 내부: 볼륨 부스트/복원
+
+    /// 시스템 미디어 볼륨을 최대로 올린다. 원래 값은 savedSystemVolume + UserDefaults에 1회만 저장(복원용).
+    private func boostSystemVolume() {
+        ensureVolumeViewInHierarchy()
+        if savedSystemVolume == nil {
+            // 이전 세션의 미복구 잔존이 있으면 그 값이 진짜 원래 볼륨이다(현재값은 잔존 1.0일 수 있어 신뢰 불가).
+            // → persisted를 우선 채택해, 복구 실패 후 재부스트로 진짜 원래값이 손실되는 것을 막는다.
+            let original = persistedBoostVolume() ?? AVAudioSession.sharedInstance().outputVolume
+            savedSystemVolume = original
+            persistBoostVolume(original)   // force-quit 복구용 영구 저장.
+        }
+        setSystemVolume(1.0)
+    }
+
+    /// 원래 시스템 볼륨으로 복원. 인메모리 값 우선, 없으면 UserDefaults 잔존값(force-quit 후 다음 실행).
+    /// 슬라이더가 아직 준비 안 돼 실제 적용에 실패하면 잔존값을 남겨 다음 .active에서 재시도한다.
+    private func restoreSystemVolume() {
+        guard let target = savedSystemVolume ?? persistedBoostVolume() else { return }
+        ensureVolumeViewInHierarchy()
+        guard setSystemVolume(target) else { return }   // 적용 실패(슬라이더 미준비) 시 잔존값 보존 → 재시도.
+        savedSystemVolume = nil
+        clearPersistedBoostVolume()
+    }
+
+    private func persistBoostVolume(_ value: Float) {
+        UserDefaults.standard.set(Double(value), forKey: SharedConstants.UserDefaultsKey.boostedSystemVolume)
+    }
+
+    private func persistedBoostVolume() -> Float? {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: SharedConstants.UserDefaultsKey.boostedSystemVolume) != nil else { return nil }
+        return Float(defaults.double(forKey: SharedConstants.UserDefaultsKey.boostedSystemVolume))
+    }
+
+    private func clearPersistedBoostVolume() {
+        UserDefaults.standard.removeObject(forKey: SharedConstants.UserDefaultsKey.boostedSystemVolume)
+    }
+
+    /// 시스템 볼륨 적용. 슬라이더가 없으면(미부착/레이아웃 전) false 반환(호출부가 재시도 판단).
+    @discardableResult
+    private func setSystemVolume(_ value: Float) -> Bool {
+        guard let slider = volumeSlider else { return false }
+        slider.value = max(0, min(1, value))
+        return true
+    }
+
+    private var volumeSlider: UISlider? {
+        volumeView.subviews.compactMap { $0 as? UISlider }.first
+    }
+
+    /// MPVolumeView는 윈도 계층에 부착돼야 내부 슬라이더가 동작한다. 화면 밖·투명으로 1회 부착.
+    private func ensureVolumeViewInHierarchy() {
+        guard volumeView.superview == nil, let window = activeWindow() else { return }
+        window.addSubview(volumeView)
+        volumeView.layoutIfNeeded()   // 슬라이더 subview 즉시 생성 유도.
+    }
+
+    private func activeWindow() -> UIWindow? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+        return windows.first { $0.isKeyWindow } ?? windows.first
     }
 
     // MARK: - 내부: 타이머/발사 시각

@@ -43,6 +43,7 @@ nonisolated enum SharedConstants {
         static let sharedPayload = "sharedPayload"   // Share Extension이 기록하는 공유 페이로드(App Group, §4.10)
         static let defaultSound = "defaultSound"   // 신규 알람 기본 사운드(설정 §3.6). SoundType.rawValue 저장.
         static let activeSnoozes = "activeSnoozes"
+        static let boostedSystemVolume = "boostedSystemVolume"   // 볼륨 부스트 중 잔존한 원래 볼륨(force-quit 복구용).
     }
 
     /// 백그라운드 복구용 BGAppRefreshTask 식별자(§9 Phase 5 후보). Info.plist
