@@ -17,8 +17,10 @@ import Foundation
 import UserNotifications
 
 enum WatchdogScheduler {
-    /// watchdog 재예약 주기(분). 정상 동작 시엔 절대 발화하지 않는다(계속 미뤄짐).
-    static let intervalMinutes: Int = 15
+    /// watchdog 발화까지의 간격(분). 앱 종료 후 경고 도착 시간을 좌우한다(작을수록 빠름).
+    /// 정상 동작 시엔 절대 발화하지 않는다(계속 미뤄짐). 재예약 주기는 이 값에서 파생(max(60, N×60−60)초),
+    /// 발화까지 항상 60초 안전마진 유지. 트리거 최소 60초 제약상 2분이 실용적 최저값.
+    static let intervalMinutes: Int = 2
 
     private static let center = UNUserNotificationCenter.current()
 
