@@ -80,8 +80,8 @@ struct ReminderEditSheet: View {
             let importedImage = Self.loadSharedImportImage(named: prefillImageImportFileName)
             let prefilledType: ContentType = (importedImage != nil) ? .image : ((prefillURL != nil) ? .url : .memo)
             let prefilledURLText = prefillURL ?? ""
-            // 신규 알람 기본 사운드는 설정(§3.6)에서 정한 전역 기본값을 따른다. 미설정 시 .defaultSound.
-            let defaultSound = Self.defaultSoundSetting()
+            // 신규 알람 기본 사운드는 항상 기본음(§3.3). 저장값에 무관하게 .defaultSound로 초기화한다.
+            let defaultSound = SoundType.defaultSound
             _selectedType = State(initialValue: prefilledType)
             _title = State(initialValue: "")
             _memo = State(initialValue: "")
@@ -691,12 +691,6 @@ struct ReminderEditSheet: View {
     }
 
     // MARK: - 헬퍼
-
-    /// 설정에 저장된 전역 기본 사운드(§3.6). 미설정/잘못된 값이면 .defaultSound.
-    private static func defaultSoundSetting() -> SoundType {
-        let raw = UserDefaults.standard.string(forKey: SharedConstants.UserDefaultsKey.defaultSound)
-        return raw.flatMap(SoundType.init(rawValue:)) ?? .defaultSound
-    }
 
     private static func roundedUpToMinute(_ date: Date) -> Date {
         let calendar = Calendar.current
