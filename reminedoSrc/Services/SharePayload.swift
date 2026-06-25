@@ -14,11 +14,14 @@
 import Foundation
 
 struct SharePayload: Codable {
+    /// 확장이 미리 발급한 reminder UUID 문자열(없으면 nil). 앱이 같은 id로 레코드를 생성해
+    /// 확장이 임시 예약한 알림(식별자=이 id)을 정식 예약으로 교체한다 — 중복 발화 방지.
+    let id: String?
     let contentTypeRaw: String?
     let url: String?
     let imageFileName: String?
     let sharedAt: Date
-    /// 예전 공유 확장 UI에서 입력받던 추가 필드(없으면 nil — 하위호환).
+    /// 공유 확장 폼에서 입력받는 제목·시각(없으면 nil — 이미지/구버전 하위호환).
     let title: String?
     let scheduledAt: Date?
     /// RepeatRule.rawValue 문자열(none/daily/weekly). weekly 요일은 확장 UI에서 미지원 → none/daily만.

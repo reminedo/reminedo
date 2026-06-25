@@ -2,121 +2,179 @@
 //  ShareViewController.swift
 //  ReminedoShare
 //
-//  The share extension only imports shared content and opens the main app.
-//  Reminder creation, validation, scheduling, and widget refresh stay in the app.
+//  공유 확장: 제목·링크·시간만 입력받아 (1) iOS 로컬 알림을 직접 예약하고 (2) App Group에
+//  페이로드를 기록한다. 앱을 열지 않아도 알림이 울리며, 앱은 다음 실행 시 페이로드로 레코드를
+//  생성하고 같은 식별자로 정식 재예약한다(중복 발화 없음). 나머지 설정은 앱에서 수정한다.
 //
-//  추출은 견고성을 위해 다단 폴백을 둔다: URL provider는 loadItem → loadObject(URL) → 콘텐츠
-//  텍스트(attributedContentText) 순으로 시도한다(YouTube처럼 loadItem이 실패/빈값을 주는 소스 대응).
-//  실패 메시지는 단계별로 분리해 어느 지점에서 막혔는지 화면에서 바로 구분되게 한다.
+//  ※ 확장에서의 알림 예약은 iOS 동작이 기기/버전에 따라 다를 수 있어 실기기 검증이 필요하다.
+//    설령 확장 예약이 안 떠도, 앱을 한 번 열면 페이로드로 정식 예약되어 동작은 보장된다.
 //
 
 import UIKit
+import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 final class ShareViewController: UIViewController {
     private enum Local {
         static let appGroupID = "group.com.geniusjun.reminedo"
         static let payloadKey = "sharedPayload"
-        static let addURL = "reminedo://add"
         static let importDirectoryName = "shared-imports"
+        static let categoryID = "REMINDER_CATEGORY"   // 앱의 NotificationCategory.reminder와 동일해야 함.
     }
 
-    /// 실패 단계별 메시지(진단용). 어느 가지에서 막혔는지 디바이스에서 바로 구분된다.
     private enum Copy {
-        static let noContent = "공유할 URL이나 사진을 찾지 못했어요. (콘텐츠 없음)"
-        static let urlLoadFailed = "링크를 불러오지 못했어요. (URL 로드 실패)"
-        static let badURL = "지원하지 않는 링크예요. (http/https만 가능)"
-        static let imageFailed = "사진을 불러오지 못했어요. (이미지 로드 실패)"
-        static let saveFailed = "저장에 실패했어요. (앱 그룹 저장 실패)"
+        static let imageFailed = "사진을 불러오지 못했어요."
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
-        extractAndOpenApp()
+        view.backgroundColor = .systemBackground
+
+        let providers = collectProviders()
+
+        // 이미지 공유: 이미지를 App Group에 저장한 뒤 입력 폼(제목·시간)을 띄운다.
+        if let imageProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) {
+            handleImage(imageProvider)
+            return
+        }
+
+        // URL/텍스트 공유: 링크를 추출해 입력 폼을 띄운다(없으면 빈 링크로).
+        resolveURLString(from: providers) { [weak self] urlString in
+            DispatchQueue.main.async { self?.presentForm(prefilledURL: urlString ?? "") }
+        }
     }
 
-    private func extractAndOpenApp() {
-        let providers = (extensionContext?.inputItems as? [NSExtensionItem])?
+    // MARK: - 입력 폼
+
+    private func presentForm(prefilledURL: String) {
+        embed(ShareComposeView(
+            kind: .url,
+            initialURL: prefilledURL,
+            onSave: { [weak self] title, urlText, date in
+                self?.saveURLReminder(title: title, urlText: urlText, date: date)
+            },
+            onCancel: { [weak self] in self?.cancel() }
+        ))
+    }
+
+    private func presentImageForm(fileName: String) {
+        embed(ShareComposeView(
+            kind: .image,
+            onSave: { [weak self] title, _, date in
+                self?.saveImageReminder(title: title, date: date, fileName: fileName)
+            },
+            onCancel: { [weak self] in self?.cancel() }
+        ))
+    }
+
+    private func embed(_ compose: ShareComposeView) {
+        let host = UIHostingController(rootView: compose)
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        host.didMove(toParent: self)
+    }
+
+    private func saveURLReminder(title: String, urlText: String, date: Date) {
+        let id = UUID()
+        scheduleNotification(id: id, title: title, date: date)
+        let trimmedURL = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var payload: [String: Any] = [
+            "id": id.uuidString,
+            "contentTypeRaw": trimmedURL.isEmpty ? "memo" : "url",
+            "title": title,
+            "scheduledAt": date.timeIntervalSince1970,
+            "sharedAt": Date().timeIntervalSince1970,
+        ]
+        if !trimmedURL.isEmpty { payload["url"] = trimmedURL }
+        persist(payload: payload)
+        finish()
+    }
+
+    private func saveImageReminder(title: String, date: Date, fileName: String) {
+        let id = UUID()
+        scheduleNotification(id: id, title: title, date: date)
+        persist(payload: [
+            "id": id.uuidString,
+            "contentTypeRaw": "image",
+            "imageFileName": fileName,
+            "title": title,
+            "scheduledAt": date.timeIntervalSince1970,
+            "sharedAt": Date().timeIntervalSince1970,
+        ])
+        finish()
+    }
+
+    // MARK: - 알림 직접 예약 (확장)
+
+    private func scheduleNotification(id: UUID, title: String, date: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = ""
+        // 커스텀 사운드는 번들 의존이 있어 .default로 둔다. 앱이 열리면 정식(alarm.caf)으로 재예약된다.
+        content.sound = .default
+        content.userInfo = ["reminderId": id.uuidString, "isSnooze": false]
+        content.categoryIdentifier = Local.categoryID
+
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        // 식별자 = id.uuidString → 앱의 NotificationID.base(reminder.id)와 동일 스킴(prefix 취소로 교체됨).
+        let request = UNNotificationRequest(identifier: id.uuidString, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
+    // MARK: - 이미지 공유 (이미지 저장 → 입력 폼)
+
+    private func handleImage(_ provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            guard let data = Self.imageData(from: item),
+                  let fileName = self.saveImportedImage(data)
+            else {
+                DispatchQueue.main.async { self.presentNoticeThenFinish(Copy.imageFailed) }
+                return
+            }
+            DispatchQueue.main.async { self.presentImageForm(fileName: fileName) }
+        }
+    }
+
+    // MARK: - URL 추출 (loadItem → loadObject → 콘텐츠 텍스트)
+
+    private func collectProviders() -> [NSItemProvider] {
+        (extensionContext?.inputItems as? [NSExtensionItem])?
             .compactMap { $0.attachments }
             .flatMap { $0 } ?? []
+    }
 
+    private func resolveURLString(from providers: [NSItemProvider], completion: @escaping (String?) -> Void) {
         if let urlProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }) {
-            loadURL(from: urlProvider)
+            urlProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
+                guard let self else { return }
+                if let url = Self.url(from: item) { completion(url.absoluteString); return }
+                _ = urlProvider.loadObject(ofClass: URL.self) { url, _ in
+                    completion(url?.absoluteString ?? self.firstURLFromContentText()?.absoluteString)
+                }
+            }
             return
         }
-
         if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
-            loadTextURL(from: textProvider)
+            textProvider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
+                guard let self else { return }
+                let textURL = (item as? String).flatMap(Self.firstURL(in:))
+                completion(textURL?.absoluteString ?? self.firstURLFromContentText()?.absoluteString)
+            }
             return
         }
-
-        if let imageProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) {
-            loadImage(from: imageProvider)
-            return
-        }
-
-        // 폴백: attachment provider가 없으면 NSExtensionItem.attributedContentText에서 URL 검출.
-        if let url = firstURLFromContentText() {
-            handle(url: url)
-            return
-        }
-
-        presentNoticeThenFinish(Copy.noContent)
+        completion(firstURLFromContentText()?.absoluteString)
     }
 
-    // MARK: - URL 로드 (loadItem → loadObject → 콘텐츠 텍스트 폴백)
-
-    private func loadURL(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
-            guard let self else { return }
-            if let url = Self.url(from: item) {
-                DispatchQueue.main.async { self.handle(url: url) }
-            } else {
-                // loadItem이 nil/예상 밖 타입 → loadObject(URL)로 재시도.
-                self.loadURLViaObject(from: provider)
-            }
-        }
-    }
-
-    private func loadURLViaObject(from provider: NSItemProvider) {
-        // loadObject는 provider가 URL을 못 주면 completion에 nil/에러를 주므로 canLoadObject 가드 없이 안전.
-        _ = provider.loadObject(ofClass: URL.self) { [weak self] url, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                if let url {
-                    self.handle(url: url)
-                } else {
-                    self.fallbackToContentTextOrFail()
-                }
-            }
-        }
-    }
-
-    private func loadTextURL(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
-            guard let self else { return }
-            let textURL = (item as? String).flatMap(Self.firstURL(in:))
-            DispatchQueue.main.async {
-                if let url = textURL ?? self.firstURLFromContentText() {
-                    self.handle(url: url)
-                } else {
-                    self.presentNoticeThenFinish(Copy.urlLoadFailed)
-                }
-            }
-        }
-    }
-
-    /// loadItem/loadObject가 모두 실패했을 때 마지막으로 콘텐츠 텍스트에서 URL을 찾는다.
-    private func fallbackToContentTextOrFail() {
-        if let url = firstURLFromContentText() {
-            handle(url: url)
-        } else {
-            presentNoticeThenFinish(Copy.urlLoadFailed)
-        }
-    }
-
-    /// NSExtensionItem.attributedContentText(제목/본문 텍스트)에서 첫 http(s) URL을 검출한다.
     private func firstURLFromContentText() -> URL? {
         let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
         for item in items {
@@ -128,52 +186,8 @@ final class ShareViewController: UIViewController {
         return nil
     }
 
-    // MARK: - 이미지 로드
-
-    private func loadImage(from provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] item, _ in
-            guard let self else { return }
-            guard let data = Self.imageData(from: item),
-                  let fileName = self.saveImportedImage(data)
-            else {
-                DispatchQueue.main.async { self.presentNoticeThenFinish(Copy.imageFailed) }
-                return
-            }
-            DispatchQueue.main.async {
-                guard self.persist(payload: [
-                    "contentTypeRaw": "image",
-                    "imageFileName": fileName,
-                    "sharedAt": Date().timeIntervalSince1970
-                ]) else {
-                    self.presentNoticeThenFinish(Copy.saveFailed)
-                    return
-                }
-                self.openMainAppThenFinish()
-            }
-        }
-    }
-
-    // MARK: - 저장 + 앱 열기
-
-    private func handle(url: URL?) {
-        guard let url, url.scheme == "http" || url.scheme == "https" else {
-            presentNoticeThenFinish(Copy.badURL)
-            return
-        }
-        guard persist(payload: [
-            "contentTypeRaw": "url",
-            "url": url.absoluteString,
-            "sharedAt": Date().timeIntervalSince1970
-        ]) else {
-            presentNoticeThenFinish(Copy.saveFailed)
-            return
-        }
-        openMainAppThenFinish()
-    }
-
     // MARK: - 파싱 헬퍼
 
-    /// loadItem이 돌려주는 다양한 표현(URL/NSURL/String/Data)을 URL로 정규화한다.
     private static func url(from item: NSSecureCoding?) -> URL? {
         switch item {
         case let value as URL:
@@ -228,6 +242,7 @@ final class ShareViewController: UIViewController {
         }
     }
 
+    @discardableResult
     private func persist(payload: [String: Any]) -> Bool {
         guard
             let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
@@ -237,38 +252,14 @@ final class ShareViewController: UIViewController {
         return true
     }
 
-    private func openMainAppThenFinish() {
-        guard let url = URL(string: Local.addURL) else {
-            finish()
-            return
-        }
-        // Share extension에서 호스트 앱 열기: extensionContext.open(_:)은 iOS/기기에 따라 무시되는
-        // 경우가 있어, responder chain을 타고 UIApplication을 찾아 직접 open한다(널리 쓰이는 우회책).
-        openURLViaResponderChain(url)
-        // open은 비동기로 앱을 띄우므로 약간 늦춰 종료한다 — 즉시 finish()하면 앱 전환이 끊길 수 있다.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.finish()
-        }
-    }
-
-    private func openURLViaResponderChain(_ url: URL) {
-        // open(_:options:completionHandler:)은 확장 타깃(APPLICATION_EXTENSION_API_ONLY)에서
-        // 직접 호출이 막히므로, selector로 우회해 UIApplication의 openURL:을 perform한다.
-        let selector = NSSelectorFromString("openURL:")
-        var responder: UIResponder? = self
-        while let current = responder {
-            if current.responds(to: selector) {
-                current.perform(selector, with: url)
-                return
-            }
-            responder = current.next
-        }
-        // responder chain에서 처리자를 못 찾으면 기존 경로로 폴백.
-        extensionContext?.open(url, completionHandler: nil)
-    }
+    // MARK: - 종료
 
     private func finish() {
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+
+    private func cancel() {
+        extensionContext?.cancelRequest(withError: NSError(domain: "ReminedoShare", code: 0))
     }
 
     private func presentNoticeThenFinish(_ message: String) {

@@ -69,7 +69,10 @@ struct ReminedoApp: App {
                 .environment(alarmAudio)
                 .preferredColorScheme(.dark)
                 .onOpenURL { handleURL($0) }
-                .task { processPendingImageDeletes() }
+                .task {
+                    processPendingImageDeletes()
+                    consumeSharedReminderIfNeeded()
+                }
         }
         .modelContainer(SharedModelContainer.shared)
         // 백그라운드 진입 시: BGAppRefreshTask 예약 + 오디오 keep-alive 시작.
@@ -85,6 +88,7 @@ struct ReminedoApp: App {
                 snoozeActivity.endExpired()
                 notificationService.disableFiredOneShots()
                 alarmAudio.stop()
+                consumeSharedReminderIfNeeded()
             default: break
             }
         }
@@ -105,16 +109,66 @@ struct ReminedoApp: App {
                 appState.pendingRoute = .edit(uuid)
             }
         case "add":
-            // 공유 확장에서 가져온 URL/사진을 메인 앱의 알림 추가 시트로 넘긴다.
-            // 실제 저장, 검증, 예약은 앱의 기존 생성 흐름을 그대로 사용한다.
-            if let payload = SharePayload.consume() {
-                appState.pendingAddURL = payload.url
-                appState.pendingAddImageImportFileName = payload.imageFileName
-            }
-            appState.pendingAddRequested = true
+            // (구) 공유 확장이 앱을 열던 경로. 현재 확장은 앱을 열지 않지만 하위호환으로 유지 —
+            // scenePhase==.active/런치 소비와 동일 로직을 탄다.
+            consumeSharedReminderIfNeeded()
         default:
             break
         }
+    }
+
+    /// 공유 확장이 App Group에 남긴 페이로드를 1회 소비한다(런치·scenePhase==.active).
+    /// 제목+시각이 있으면(새 폼 흐름) 곧장 Reminder를 만들고 정식 재예약한다 — 확장이 임시로 건
+    /// 알림(식별자=같은 id)을 prefix 취소로 교체하므로 중복 발화가 없다. 제목/시각이 없으면
+    /// (이미지·구버전) 기존 프리필 추가 시트 경로로 넘긴다.
+    private func consumeSharedReminderIfNeeded() {
+        guard let payload = SharePayload.consume() else { return }
+
+        let title = (payload.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, let scheduledAt = payload.scheduledAt else {
+            // 이미지/구버전: 프리필 추가 시트로.
+            appState.pendingAddURL = payload.url
+            appState.pendingAddImageImportFileName = payload.imageFileName
+            appState.pendingAddRequested = true
+            return
+        }
+
+        let context = SharedModelContainer.shared.mainContext
+        let id = payload.id.flatMap(UUID.init(uuidString:)) ?? UUID()
+        // 같은 id가 이미 있으면(중복 소비) 스킵.
+        let existing = (try? context.fetch(FetchDescriptor<Reminder>(predicate: #Predicate { $0.id == id }))) ?? []
+        guard existing.isEmpty else { return }
+
+        // 콘텐츠 타입별 레코드 생성. 사진은 App Group(shared-imports) → ImageStore로 옮긴다.
+        // 공유로 만든 알람은 나머지 설정을 기본값으로 명시 채운다(반복 없음·켜짐·기본음·스누즈 5분).
+        let reminder: Reminder
+        if payload.contentTypeRaw == "image", let sharedName = payload.imageFileName {
+            let importedName = imageStore.importFromSharedContainer(named: sharedName, for: id)
+            reminder = Reminder(
+                id: id, title: title, scheduledAt: scheduledAt,
+                repeatRule: .none, isEnabled: true,
+                contentType: .image, imageFileName: importedName,
+                snoozeEnabled: true, snoozeMinutes: 5, soundType: .defaultSound
+            )
+        } else if payload.url?.isEmpty == false {
+            reminder = Reminder(
+                id: id, title: title, scheduledAt: scheduledAt,
+                repeatRule: .none, isEnabled: true,
+                contentType: .url, targetURL: payload.url,
+                snoozeEnabled: true, snoozeMinutes: 5, soundType: .defaultSound
+            )
+        } else {
+            reminder = Reminder(
+                id: id, title: title, scheduledAt: scheduledAt,
+                repeatRule: .none, isEnabled: true,
+                contentType: .memo, memo: "",
+                snoozeEnabled: true, snoozeMinutes: 5, soundType: .defaultSound
+            )
+        }
+        context.insert(reminder)
+        try? context.save()
+        // 확장의 임시 알림(.default)을 앱의 정식 예약(alarm.caf·카테고리)으로 교체.
+        notificationService.reschedule(reminder)
     }
 
     /// 앱 시작 시 지연 삭제 큐(UserDefaults `pendingImageDeletes`)를 정리한다(§4.3/§4.7).
