@@ -66,6 +66,7 @@ struct ShareComposeView: View {
                 Section("시간") {
                     DatePicker("알림 시각", selection: $date)
                         .datePickerStyle(.compact)
+                        .environment(\.locale, Locale(identifier: "ko_KR"))
                 }
             }
             .navigationTitle("리마인두에 추가")
