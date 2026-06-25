@@ -16,6 +16,13 @@ import UserNotifications
 
 @Observable
 final class NotificationService {
+    /// Critical Alerts 엔타이틀먼트(com.apple.developer.usernotifications.critical-alerts) 승인 후 true로 켠다.
+    /// - true 전: 알람 알림이 .timeSensitive로 동작(집중/DnD 관통, 무음 스위치는 못 뚫음). time-sensitive
+    ///   엔타이틀먼트는 이미 보유 중이라 서명/아카이빙에 영향 없음.
+    /// - true로 켤 때: 반드시 Config/reminedo.entitlements에 critical-alerts 키도 함께 추가해야 실제 동작한다
+    ///   (키만 미리 넣으면 승인 전 코드 서명이 깨지므로 플래그와 엔타이틀먼트를 동시에 켤 것).
+    static let criticalAlertsEnabled = false
+
     private let center = UNUserNotificationCenter.current()
 
     /// 뷰가 @Environment(\.modelContext)로 받는 것과 동일한 공유 컨텍스트(§refactor).
@@ -43,8 +50,11 @@ final class NotificationService {
     // MARK: - 권한
 
     /// 알림 권한 요청(alert/sound/badge). 정식 온보딩(§3.7)에서 [알림 허용] 시 호출한다.
+    /// Critical Alerts 활성 시 .criticalAlert 권한도 함께 요청한다("중요 알림" 별도 프롬프트).
     func requestAuthorization() async {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+        var options: UNAuthorizationOptions = [.alert, .sound, .badge]
+        if Self.criticalAlertsEnabled { options.insert(.criticalAlert) }
+        _ = try? await center.requestAuthorization(options: options)
         await refreshAuthorization()
     }
 
@@ -268,17 +278,25 @@ final class NotificationService {
         content.body = ""
         // 앱 생존 시 keep-alive가 같은 alarm.caf를 풀볼륨 재생하므로 UN 사운드도 동일 파일로 통일한다
         // (겹쳐도 같은 소리). 앱 사망 시엔 이 알림이 알람음으로 백스톱한다(§오디오 알람). silent는 무음.
-        content.sound = (reminder.soundType == .defaultSound)
-            ? UNNotificationSound(named: UNNotificationSoundName("alarm.caf"))
-            : nil
+        if reminder.soundType == .defaultSound {
+            if Self.criticalAlertsEnabled {
+                // Critical Alert: 무음 스위치·집중모드를 관통해 풀볼륨으로 울린다(앱 사망 시에도).
+                content.sound = .criticalSoundNamed(UNNotificationSoundName("alarm.caf"), withAudioVolume: 1.0)
+                content.interruptionLevel = .critical
+            } else {
+                // 승인 전 백스톱: time-sensitive로 집중모드(DnD)는 뚫는다(무음 스위치는 못 뚫음).
+                content.sound = UNNotificationSound(named: UNNotificationSoundName("alarm.caf"))
+                content.interruptionLevel = .timeSensitive
+            }
+        } else {
+            content.sound = nil   // .silent 알람은 무음 알림.
+        }
         content.userInfo = [
             "reminderId": reminder.id.uuidString,
             "isSnooze": isSnooze,
         ]
         content.categoryIdentifier = SharedConstants.NotificationCategory.reminder
         content.threadIdentifier = threadIdentifier(for: reminder)
-        // Time Sensitive(§4.5/§1): 무음·집중 모드를 (허용된 경우) 뚫고 울리게 한다.
-        // 프로덕션: Time Sensitive 엔타이틀먼트(com.apple.developer.usernotifications.time-sensitive) 필요.
         return content
     }
 
