@@ -70,6 +70,7 @@ struct ReminedoApp: App {
                 .preferredColorScheme(.dark)
                 .onOpenURL { handleURL($0) }
                 .task {
+                    alarmAudio.recoverBoostedVolumeIfNeeded()   // force-quit로 잔존한 부스트 볼륨 복구.
                     processPendingImageDeletes()
                     consumeSharedReminderIfNeeded()
                 }
