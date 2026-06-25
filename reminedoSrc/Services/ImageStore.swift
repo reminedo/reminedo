@@ -60,6 +60,21 @@ final class ImageStore {
         return fileName
     }
 
+    /// 공유 확장이 App Group(shared-imports)에 저장해 둔 이미지를 이 저장소("{id}.jpg")로 옮기고
+    /// 원본은 지운다. 옮긴 파일명을 반환(실패 시 nil). 공유로 만든 사진 알림을 앱이 마무리할 때 쓴다.
+    func importFromSharedContainer(named fileName: String, for id: UUID) -> String? {
+        guard let container = fileManager.containerURL(forSecurityApplicationGroupIdentifier: SharedConstants.appGroupID) else {
+            return nil
+        }
+        let source = container
+            .appendingPathComponent("shared-imports", isDirectory: true)
+            .appendingPathComponent(fileName, isDirectory: false)
+        guard let image = UIImage(contentsOfFile: source.path) else { return nil }
+        let saved = try? save(image, for: id)
+        try? fileManager.removeItem(at: source)
+        return saved
+    }
+
     /// 링크 썸네일을 "{id}-link.jpg"에 JPEG로 저장(best-effort). 실패 시 nil(§4.9 영속).
     func saveLinkThumbnail(_ image: UIImage, for id: UUID) -> String? {
         let fileName = linkFileName(for: id)

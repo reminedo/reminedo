@@ -41,7 +41,8 @@ struct ReminderEditSheet: View {
     //  pickedImage = 이번에 새로 고른 이미지(아직 미저장), imageFileName = 편집 모드의 기존 저장본.
     @State private var pickedImage: UIImage?
     @State private var imageFileName: String?
-    @State private var photoItem: PhotosPickerItem?
+    /// UIKit PhotoPicker(PHPickerViewController 래퍼)를 .sheet로 띄우기 위한 플래그.
+    @State private var showPhotoPicker = false
     /// PhotosPicker가 닫힌 뒤 제목 TextField의 first responder가 막히는 iOS 이슈 대응용 재생성 키(.id).
     /// 사진 선택 시 갱신해 필드를 재생성하면 탭-포커스가 복구된다(텍스트는 $title로 보존).
     @State private var titleFieldID = UUID()
@@ -443,8 +444,11 @@ struct ReminderEditSheet: View {
                     .padding(Tokens.Spacing.row)
             }
 
-            // PhotosPicker(권한·usage description 불필요, §7). JPG/PNG 정지 이미지만.
-            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+            // 사진 선택은 아래 .sheet의 UIKit PhotoPicker(PHPickerViewController)로 띄운다
+            // (권한·usage description 불필요, §7).
+            Button {
+                showPhotoPicker = true
+            } label: {
                 HStack(spacing: 6) {
                     Image(systemName: Tokens.Symbols.image)
                     Text(loadedPreviewImage == nil ? Strings.Edit.imagePick : Strings.Edit.imageChange)
@@ -456,9 +460,17 @@ struct ReminderEditSheet: View {
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
             }
-            .onChange(of: photoItem) { _, item in
-                loadPickedImage(item)
+            .buttonStyle(.plain)
+        }
+        // SwiftUI PhotosPicker가 시트 안에서 제목 TextField 포커스를 깨는 이슈를 피하려고
+        // UIKit PHPickerViewController 래퍼(PhotoPicker)를 .sheet로 띄운다.
+        .sheet(isPresented: $showPhotoPicker) {
+            PhotoPicker(isPresented: $showPhotoPicker) { image in
+                pickedImage = image
+                // 선택 직후 제목 필드를 재생성해 포커스 막힘을 방지(이중 안전장치).
+                titleFieldID = UUID()
             }
+            .ignoresSafeArea()
         }
     }
 
@@ -472,20 +484,6 @@ struct ReminderEditSheet: View {
             loadedPreviewImage = imageStore.loadImage(named: imageFileName)
         } else {
             loadedPreviewImage = nil
-        }
-    }
-
-    private func loadPickedImage(_ item: PhotosPickerItem?) {
-        guard let item else { return }
-        Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                await MainActor.run {
-                    pickedImage = image
-                    // 사진 선택 직후 제목 필드를 재생성해 PhotosPicker 이후 포커스 막힘을 푼다.
-                    titleFieldID = UUID()
-                }
-            }
         }
     }
 
