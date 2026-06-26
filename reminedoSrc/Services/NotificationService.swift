@@ -37,9 +37,6 @@ final class NotificationService {
         }
     }
 
-    /// 권한이 새로 켜졌을 때 1회 신호(배너 "알림이 켜졌어요" 트리거용). 소비 후 false로 둔다.
-    var didJustGrantAuthorization = false
-
     // MARK: - 권한
 
     /// 알림 권한 요청(alert/sound/badge). 정식 온보딩(§3.7)에서 [알림 허용] 시 호출한다.
@@ -53,13 +50,12 @@ final class NotificationService {
         center.removeAllPendingNotificationRequests()
     }
 
-    /// scenePhase==.active마다 권한 재조회(§4.12). 거부→허용 전이를 감지하면 전체 재예약 + 토스트 신호.
+    /// scenePhase==.active마다 권한 재조회(§4.12). 거부→허용 전이를 감지하면 전체 재예약.
     func refreshAuthorization() async {
         let settings = await center.notificationSettings()
         let wasAuthorized = isAuthorized
         authorizationStatus = settings.authorizationStatus
         if !wasAuthorized && isAuthorized {
-            didJustGrantAuthorization = true
             rescheduleAllEnabled()
         }
     }
