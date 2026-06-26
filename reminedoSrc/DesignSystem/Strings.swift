@@ -76,7 +76,6 @@ enum Strings {
     enum Permission {
         static let bannerOffMessage = "알림 권한이 꺼져 있어 알람이 울리지 않아요."
         static let openSettings = "iOS 설정에서 알림 켜기"
-        static let grantedToast = "알림이 켜졌어요"
     }
 
     /// 예약 실패(64한도 등) 안내(§4.12/§8).

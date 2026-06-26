@@ -169,7 +169,7 @@
 - **시트/풀스크린 충돌:** `.act`(알림 O)는 다른 시트/풀스크린 떠 있으면 dismiss 후 라우팅. **`.edit`(위젯)는 편집 시트 작성 중이면 강제 dismiss 금지 — §3.3 "변경 사항을 버릴까요?" 폐기 가드 적용**(실수 복구 원칙 §13.5).
 
 ### 4.12 권한·예약 상태 (Phase 1b)
-- `scenePhase==.active`마다 `getNotificationSettings()` 재조회 → 배너·셀 토글 갱신. 권한 새로 켜지면 활성 알람 전체 재예약 + "알림이 켜졌어요".
+- `scenePhase==.active`마다 `getNotificationSettings()` 재조회 → 배너·셀 토글 갱신. 권한 새로 켜지면 활성 알람 전체 재예약.
 - **64개 한도:** 예약 직전 `pending+신규>64`(임계 60) 검사. **weekly는 all-or-nothing**(요일 칸 전부 못 넣으면 실패 유지). 저장은 허용 + `schedulingFailed=true` + 셀 상시 경고 배지. 배지 탭 → "기기 알림 한도예요. 매주 여러 요일 알람은 요일마다 한 칸을 써요. 다른 알람을 꺼서 자리를 비워주세요."
 - **자동 재시도:** pending 감소를 유발하는 모든 mutation(삭제/Off/만료) 후 + `scenePhase==.active` 시, `schedulingFailed` 알람을 **다음 발생 시각이 가까운 순(`nextFireDate`)** 으로 재시도. (이는 목록 표시 정렬과 별개 — 목록 정렬은 §3.2 시·분 기준이고, 재시도 우선순위에만 `nextFireDate` 사용.) 앱 미실행 시 미동작(수용 한계).
 

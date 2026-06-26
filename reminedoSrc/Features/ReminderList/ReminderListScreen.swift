@@ -23,7 +23,6 @@ struct ReminderListScreen: View {
     @State private var editTarget: Reminder?
     @State private var showingAdd = false
     @State private var showLimitAlert = false
-    @State private var showGrantedToast = false
     @State private var snackbarTask: Task<Void, Never>?
 
     /// 첫 알람 저장 후 1회 잠금화면 사용법 안내(§13.8). hasSeenLockHint로 게이팅.
@@ -54,7 +53,6 @@ struct ReminderListScreen: View {
                 Tokens.Palette.background.ignoresSafeArea()
                 mainContent
                 snackbarOverlay
-                grantedToastOverlay
                 lockHintOverlay
             }
             // 커스텀 헤더(home.png: "알림"+"+" 동일선상)를 쓰므로 네비바는 숨긴다.
@@ -89,9 +87,6 @@ struct ReminderListScreen: View {
             }
             .onChange(of: deletionManager.snackbarReminderID) { _, id in
                 if id != nil { scheduleSnackbarExpiry(for: id!) }
-            }
-            .onChange(of: notificationService.didJustGrantAuthorization) { _, granted in
-                if granted { presentGrantedToast() }
             }
             .onAppear { handleSceneActive() }
             .alert(Strings.Scheduling.limitTitle, isPresented: $showLimitAlert) {
@@ -210,24 +205,6 @@ struct ReminderListScreen: View {
                 Spacer()
                 UndoSnackbar(onUndo: { undoDelete(id) })
                     .padding(.bottom, 90)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var grantedToastOverlay: some View {
-        if showGrantedToast {
-            VStack {
-                Spacer()
-                Text(Strings.Permission.grantedToast)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Tokens.Palette.textPrimary)
-                    .padding(.horizontal, Tokens.Spacing.gutter)
-                    .padding(.vertical, Tokens.Spacing.row)
-                    .background(Tokens.Palette.accent.opacity(0.9))
-                    .clipShape(Capsule())
-                    .padding(.bottom, 90)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
@@ -371,15 +348,6 @@ struct ReminderListScreen: View {
         var queue = UserDefaults.standard.stringArray(forKey: key) ?? []
         queue.append(fileName)
         UserDefaults.standard.set(queue, forKey: key)
-    }
-
-    private func presentGrantedToast() {
-        notificationService.didJustGrantAuthorization = false
-        withAnimation { showGrantedToast = true }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            withAnimation { showGrantedToast = false }
-        }
     }
 
     private func openSettings() {
