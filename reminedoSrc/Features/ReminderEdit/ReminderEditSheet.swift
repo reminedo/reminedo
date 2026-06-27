@@ -441,8 +441,11 @@ struct ReminderEditSheet: View {
                 .foregroundStyle(Tokens.Palette.textSecondary)
 
             if let preview = loadedPreviewImage {
-                // 선택/기존 이미지 미리보기(읽기전용). 풀스크린 없이 미리보기만 노출한다 —
-                // 탭 타깃을 없애 제목 입력 탭이 풀스크린으로 새는 문제를 차단한다.
+                // 선택/기존 이미지 미리보기(읽기전용). 풀스크린 없이 미리보기만 노출한다.
+                // ⚠️ .scaledToFill()은 이미지를 프레임보다 크게 키워 상하로 overflow시키고,
+                //    .clipped()는 '보이는 것'만 자를 뿐 넘친 영역의 hit-test는 살아있어
+                //    바로 위 제목 TextField의 탭을 가로챈다(세로 사진일수록 심함). 읽기 전용
+                //    미리보기이므로 hit-test 자체를 꺼서 제목 입력을 막지 않게 한다.
                 Image(uiImage: preview)
                     .resizable()
                     .scaledToFill()
@@ -450,6 +453,8 @@ struct ReminderEditSheet: View {
                     .frame(height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                     .clipped()
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(false)
             } else {
                 Text(Strings.Edit.imagePickHint)
                     .font(.footnote)
