@@ -43,7 +43,13 @@ enum BackgroundRefreshManager {
         notificationService.retryFailedScheduling()
         notificationService.rescheduleAllEnabled()
         WatchdogScheduler.reschedule()   // 이슈9: 백그라운드 보조 틱 — watchdog도 계속 미루기.
-        // 내부 Task가 비동기로 진행되므로 즉시 완료 신호(best-effort, 복구는 fire-and-forget).
-        task.setTaskCompleted(success: true)
+        // 이슈9(원인 B 복구): 오디오 인터럽트로 keep-alive(무음/타이머/watchdog)가 죽은 채
+        // .ended가 끝내 전달 안 됐을 수 있다. BGTask로 깨어난 김에 재구성(idempotent: 미래 알람
+        // 없으면 stop, 무음 재생 중이면 무동작). 메인 액터 hop 완료 후 완료 신호를 보내 복구가
+        // suspend 전에 확실히 실행되게 한다.
+        Task { @MainActor in
+            AlarmAudioService.shared.startKeepAlive()
+            task.setTaskCompleted(success: true)
+        }
     }
 }
