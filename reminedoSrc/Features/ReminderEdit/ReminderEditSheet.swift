@@ -284,15 +284,13 @@ struct ReminderEditSheet: View {
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
-                // 엔터/완료 시 포커스를 명시적으로 해제. 이게 없으면 @FocusState가 true로 박혀(stale)
-                // 다음 탭이 true→true 무변화가 되어 재포커스(키보드)가 안 뜬다.
+                // 엔터/완료 시 포커스를 명시적으로 해제(stale FocusState 방지).
+                // ⚠️ TextField에 .onTapGesture를 붙이면 네이티브 탭→편집 진입 제스처를 가로채
+                //    제목 입력이 아예 막힌다(추가/편집 공통). 그래서 탭 핸들러는 두지 않고,
+                //    탭→포커스는 네이티브에 맡긴다. PHPicker 해제 후 key window는
+                //    PhotoPicker(topVC present + makeKey)가 복원하므로 별도 핵이 필요 없다.
                 .submitLabel(.done)
                 .onSubmit { titleFocused = false }
-                // 탭 시 false→true로 강제 토글해 stale 포커스에서도 항상 재포커스를 보장.
-                .onTapGesture {
-                    titleFocused = false
-                    DispatchQueue.main.async { titleFocused = true }
-                }
         }
     }
 
