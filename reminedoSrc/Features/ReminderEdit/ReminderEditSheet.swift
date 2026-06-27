@@ -43,6 +43,9 @@ struct ReminderEditSheet: View {
     @State private var imageFileName: String?
     /// UIKit PhotoPicker(PHPickerViewController 래퍼)를 .sheet로 띄우기 위한 플래그.
     @State private var showPhotoPicker = false
+    /// 제목 TextField 포커스(first responder) 명시 관리. PHPicker 해제 후에도 탭으로 키보드가
+    /// 정상 진입하도록 SwiftUI 포커스를 일원화한다(PhotoPicker의 key window 복원과 함께 동작).
+    @FocusState private var titleFocused: Bool
     /// 미리보기 캐시(이슈4): currentImage computed를 대체. body 재평가마다 디스크 I/O·UIImage 재생성을 막아
     /// 제목 TextField 포커스(First Responder) 안정화. pickedImage/imageFileName 변경 시 한 번만 로드.
     @State private var loadedPreviewImage: UIImage?
@@ -212,6 +215,11 @@ struct ReminderEditSheet: View {
             .background(
                 PhotoPicker(isPresented: $showPhotoPicker) { image in
                     pickedImage = image
+                    // [백업] 사진 선택 직후 제목으로 포커스 자동 진입. 모달 teardown 직후라 약간의 지연 필요.
+                    //   미리보기가 키보드에 가려져 거슬리면 이 블록을 제거.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        titleFocused = true
+                    }
                 }
             )
             .confirmationDialog(Strings.Edit.discardTitle, isPresented: $showDiscardConfirm, titleVisibility: .visible) {
@@ -270,11 +278,14 @@ struct ReminderEditSheet: View {
                 .font(.footnote)
                 .foregroundStyle(Tokens.Palette.textSecondary)
             TextField(Strings.Edit.titlePlaceholder, text: $title)
+                .focused($titleFocused)
                 .textFieldStyle(.plain)
                 .padding(Tokens.Spacing.row)
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
+                // [백업] PHPicker 해제 후 탭-포커스가 막히면 대비책. 이상하면(커서 위치 튐 등) 제거.
+                .onTapGesture { titleFocused = true }
         }
     }
 
