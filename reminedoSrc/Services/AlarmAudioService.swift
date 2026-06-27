@@ -362,7 +362,9 @@ final class AlarmAudioService {
         watchdogTimer?.cancel()
         WatchdogScheduler.reschedule()   // 즉시 1회 밀어두기.
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        let period = max(60, TimeInterval(WatchdogScheduler.intervalMinutes * 60) - 60) // 만료 직전에 갱신
+        // 만료(intervalMinutes*60=300s)까지 큰 안전마진을 두려고 만료 창과 무관하게 60초마다 재예약.
+        // 마진 = 300 - 60 = 240초 → 백그라운드 throttle/짧은 인터럽트에도 오발화 방지.
+        let period: TimeInterval = 60
         timer.schedule(deadline: .now() + period, repeating: period)
         timer.setEventHandler {
             WatchdogScheduler.reschedule()
@@ -379,9 +381,17 @@ final class AlarmAudioService {
 
     private func handleInterruption(typeRaw: UInt) {
         guard let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
-        if type == .ended {
-            try? AVAudioSession.sharedInstance().setActive(true)
-            if isRinging { alarmPlayer?.play() } else { silencePlayer?.play() }
+        guard type == .ended else { return }
+        // .shouldResume 권고와 무관하게 항상 복구 시도(놓치면 watchdog 오발화).
+        try? AVAudioSession.sharedInstance().setActive(true)
+        if isRinging {
+            alarmPlayer?.play()
+        } else if silencePlayer != nil {
+            silencePlayer?.play()
+        } else if UIApplication.shared.applicationState == .background, nearestFire() != nil {
+            // 백그라운드에서 인터럽트로 무음/타이머/watchdog가 죽었으면 keep-alive 전체를 재구성(원인 B 복구).
+            // 포그라운드는 인앱 UI/scenePhase(.active→stop)가 담당하므로 여기서 keep-alive를 켜지 않는다.
+            startKeepAlive()
         }
     }
 
