@@ -207,6 +207,13 @@ struct ReminderEditSheet: View {
             }
             .onChange(of: pickedImage) { _, _ in reloadPreview() }
             .onChange(of: imageFileName) { _, _ in reloadPreview() }
+            // 사진 선택기: 중첩 .sheet 대신 보이지 않는 host에서 UIKit present로 PHPicker를 띄운다
+            // (중첩 시트 해제 시 시트 전체 터치가 죽던 버그 회피). PhotoPicker.swift 참고.
+            .background(
+                PhotoPicker(isPresented: $showPhotoPicker) { image in
+                    pickedImage = image
+                }
+            )
             .confirmationDialog(Strings.Edit.discardTitle, isPresented: $showDiscardConfirm, titleVisibility: .visible) {
                 Button(Strings.Edit.discardConfirm, role: .destructive) { dismiss() }
                 Button(Strings.Edit.discardCancel, role: .cancel) {}
@@ -435,7 +442,7 @@ struct ReminderEditSheet: View {
                     .padding(Tokens.Spacing.row)
             }
 
-            // 사진 선택은 아래 .sheet의 UIKit PhotoPicker(PHPickerViewController)로 띄운다
+            // 사진 선택은 루트 .background의 PhotoPicker(UIKit present)로 띄운다
             // (권한·usage description 불필요, §7).
             Button {
                 showPhotoPicker = true
@@ -452,14 +459,6 @@ struct ReminderEditSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
             }
             .buttonStyle(.plain)
-        }
-        // SwiftUI PhotosPicker가 시트 안에서 제목 TextField 포커스를 깨는 이슈를 피하려고
-        // UIKit PHPickerViewController 래퍼(PhotoPicker)를 .sheet로 띄운다.
-        .sheet(isPresented: $showPhotoPicker) {
-            PhotoPicker(isPresented: $showPhotoPicker) { image in
-                pickedImage = image
-            }
-            .ignoresSafeArea()
         }
     }
 
