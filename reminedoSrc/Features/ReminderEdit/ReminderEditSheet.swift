@@ -212,16 +212,16 @@ struct ReminderEditSheet: View {
             .onChange(of: imageFileName) { _, _ in reloadPreview() }
             // 사진 선택기: 중첩 .sheet 대신 보이지 않는 host에서 UIKit present로 PHPicker를 띄운다
             // (중첩 시트 해제 시 시트 전체 터치가 죽던 버그 회피). PhotoPicker.swift 참고.
-            .background(
-                PhotoPicker(isPresented: $showPhotoPicker) { image in
-                    pickedImage = image
-                    // [백업] 사진 선택 직후 제목으로 포커스 자동 진입. 모달 teardown 직후라 약간의 지연 필요.
-                    //   미리보기가 키보드에 가려져 거슬리면 이 블록을 제거.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        titleFocused = true
+            //  showPhotoPicker == true일 때만 렌더링해 평상시 잔여 host/hit-test 레이어를 남기지 않는다.
+            .background {
+                if showPhotoPicker {
+                    PhotoPicker(isPresented: $showPhotoPicker) { image in
+                        pickedImage = image
                     }
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
                 }
-            )
+            }
             .confirmationDialog(Strings.Edit.discardTitle, isPresented: $showDiscardConfirm, titleVisibility: .visible) {
                 Button(Strings.Edit.discardConfirm, role: .destructive) { dismiss() }
                 Button(Strings.Edit.discardCancel, role: .cancel) {}
@@ -284,8 +284,15 @@ struct ReminderEditSheet: View {
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
-                // [백업] PHPicker 해제 후 탭-포커스가 막히면 대비책. 이상하면(커서 위치 튐 등) 제거.
-                .onTapGesture { titleFocused = true }
+                // 엔터/완료 시 포커스를 명시적으로 해제. 이게 없으면 @FocusState가 true로 박혀(stale)
+                // 다음 탭이 true→true 무변화가 되어 재포커스(키보드)가 안 뜬다.
+                .submitLabel(.done)
+                .onSubmit { titleFocused = false }
+                // 탭 시 false→true로 강제 토글해 stale 포커스에서도 항상 재포커스를 보장.
+                .onTapGesture {
+                    titleFocused = false
+                    DispatchQueue.main.async { titleFocused = true }
+                }
         }
     }
 
