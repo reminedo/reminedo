@@ -43,14 +43,9 @@ struct ReminderEditSheet: View {
     @State private var imageFileName: String?
     /// UIKit PhotoPicker(PHPickerViewController 래퍼)를 .sheet로 띄우기 위한 플래그.
     @State private var showPhotoPicker = false
-    /// PhotosPicker가 닫힌 뒤 제목 TextField의 first responder가 막히는 iOS 이슈 대응용 재생성 키(.id).
-    /// 사진 선택 시 갱신해 필드를 재생성하면 탭-포커스가 복구된다(텍스트는 $title로 보존).
-    @State private var titleFieldID = UUID()
     /// 미리보기 캐시(이슈4): currentImage computed를 대체. body 재평가마다 디스크 I/O·UIImage 재생성을 막아
     /// 제목 TextField 포커스(First Responder) 안정화. pickedImage/imageFileName 변경 시 한 번만 로드.
     @State private var loadedPreviewImage: UIImage?
-    /// 제목 포커스(이슈4): PhotosPicker dismiss 후에도 탭으로 first responder 진입을 보장.
-    @FocusState private var titleFocused: Bool
     @State private var time: Date
 
     // URL 미리보기는 시트 로컬(전역 주입 아님) — 시트 수명과 함께 산다(§4.9).
@@ -268,15 +263,11 @@ struct ReminderEditSheet: View {
                 .font(.footnote)
                 .foregroundStyle(Tokens.Palette.textSecondary)
             TextField(Strings.Edit.titlePlaceholder, text: $title)
-                .focused($titleFocused)
                 .textFieldStyle(.plain)
                 .padding(Tokens.Spacing.row)
                 .background(Tokens.Palette.card)
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                 .foregroundStyle(Tokens.Palette.textPrimary)
-                // PhotosPicker가 닫힌 뒤 first responder가 막히는 iOS 이슈 대응: 사진 선택 시 이 id가
-                // 갱신되며 필드를 재생성해 네이티브 탭-포커스를 복구한다(텍스트는 $title로 보존).
-                .id(titleFieldID)
         }
     }
 
@@ -467,8 +458,6 @@ struct ReminderEditSheet: View {
         .sheet(isPresented: $showPhotoPicker) {
             PhotoPicker(isPresented: $showPhotoPicker) { image in
                 pickedImage = image
-                // 선택 직후 제목 필드를 재생성해 포커스 막힘을 방지(이중 안전장치).
-                titleFieldID = UUID()
             }
             .ignoresSafeArea()
         }
