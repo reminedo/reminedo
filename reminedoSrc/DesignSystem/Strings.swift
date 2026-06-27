@@ -16,7 +16,7 @@ enum Strings {
 
     enum Empty {
         static let title = "아직 알람이 없어요"
-        static let message = "메모·링크·사진을 시간 알람에 붙여보세요"
+        static let message = "메모·링크·사진을 알람에 추가해보세요"
     }
 
     /// 설정 탭(§3.6). 그룹 List, 다크.
