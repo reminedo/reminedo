@@ -28,8 +28,10 @@ struct PhotoPicker: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIViewController {
         let host = UIViewController()
-        // 배경 호스트일 뿐 — 전경 컨트롤의 hit-test를 막지 않도록 터치 비활성.
+        // 배경 호스트일 뿐 — 전경 컨트롤의 hit-test를 절대 가로채지 않도록 완전 비활성/투명/0크기 처리.
         host.view.isUserInteractionEnabled = false
+        host.view.backgroundColor = .clear
+        host.view.frame = .zero
         return host
     }
 
