@@ -12,20 +12,26 @@ struct ShareComposeView: View {
     enum Kind {
         case url      // 링크 입력 필드 노출
         case image    // 사진 첨부(필드 없음, 안내만)
+        case memo     // 메모 본문 입력 필드 노출
     }
 
+    /// 메모 본문 최대 길이(앱의 Strings.Edit.memoLimit과 동일하게 유지). 확장은 별도 타깃이라 상수를 복제한다.
+    private static let memoLimit = 500
+
     let kind: Kind
-    let onSave: (_ title: String, _ urlText: String, _ date: Date) -> Void
+    let onSave: (_ title: String, _ urlText: String, _ memo: String, _ date: Date) -> Void
     let onCancel: () -> Void
 
     @State private var title: String
     @State private var urlText: String
+    @State private var memo: String
     @State private var date: Date
 
     init(
         kind: Kind,
         initialURL: String = "",
-        onSave: @escaping (_ title: String, _ urlText: String, _ date: Date) -> Void,
+        initialMemo: String = "",
+        onSave: @escaping (_ title: String, _ urlText: String, _ memo: String, _ date: Date) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.kind = kind
@@ -33,6 +39,7 @@ struct ShareComposeView: View {
         self.onCancel = onCancel
         _title = State(initialValue: "")
         _urlText = State(initialValue: initialURL)
+        _memo = State(initialValue: String(initialMemo.prefix(Self.memoLimit)))
         // 기본 시각: 현재로부터 1시간 뒤(분/초 버림으로 깔끔하게).
         let base = Date().addingTimeInterval(3600)
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour], from: base)
@@ -62,6 +69,16 @@ struct ShareComposeView: View {
                         Label("사진 1장이 첨부됩니다", systemImage: "photo")
                             .foregroundStyle(.secondary)
                     }
+                case .memo:
+                    Section("메모") {
+                        TextField("메모 내용", text: $memo, axis: .vertical)
+                            .lineLimit(3...8)
+                            .onChange(of: memo) { _, newValue in
+                                if newValue.count > Self.memoLimit {
+                                    memo = String(newValue.prefix(Self.memoLimit))
+                                }
+                            }
+                    }
                 }
                 Section("시간") {
                     DatePicker("알림 시각", selection: $date)
@@ -77,7 +94,7 @@ struct ShareComposeView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") {
-                        onSave(title.trimmingCharacters(in: .whitespacesAndNewlines), urlText, date)
+                        onSave(title.trimmingCharacters(in: .whitespacesAndNewlines), urlText, memo, date)
                     }
                     .disabled(!canSave)
                 }
