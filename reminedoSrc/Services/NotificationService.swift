@@ -21,7 +21,7 @@ final class NotificationService {
     ///   엔타이틀먼트는 이미 보유 중이라 서명/아카이빙에 영향 없음.
     /// - true로 켤 때: 반드시 Config/reminedo.entitlements에 critical-alerts 키도 함께 추가해야 실제 동작한다
     ///   (키만 미리 넣으면 승인 전 코드 서명이 깨지므로 플래그와 엔타이틀먼트를 동시에 켤 것).
-    static let criticalAlertsEnabled = false
+    static let criticalAlertsEnabled = true
 
     private let center = UNUserNotificationCenter.current()
 
