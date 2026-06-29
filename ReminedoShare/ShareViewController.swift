@@ -39,9 +39,14 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        // URL/텍스트 공유: 링크를 추출해 입력 폼을 띄운다(없으면 빈 링크로).
-        resolveURLString(from: providers) { [weak self] urlString in
-            DispatchQueue.main.async { self?.presentForm(prefilledURL: urlString ?? "") }
+        // URL/텍스트 공유: 링크가 있으면 URL 폼, 순수 텍스트(링크 없음)면 메모 폼을 띄운다.
+        resolveShareContent(from: providers) { [weak self] content in
+            DispatchQueue.main.async {
+                switch content {
+                case .url(let urlString): self?.presentForm(prefilledURL: urlString)
+                case .memo(let text): self?.presentMemoForm(prefilledMemo: text)
+                }
+            }
         }
     }
 
@@ -51,7 +56,7 @@ final class ShareViewController: UIViewController {
         embed(ShareComposeView(
             kind: .url,
             initialURL: prefilledURL,
-            onSave: { [weak self] title, urlText, date in
+            onSave: { [weak self] title, urlText, _, date in
                 self?.saveURLReminder(title: title, urlText: urlText, date: date)
             },
             onCancel: { [weak self] in self?.cancel() }
@@ -61,8 +66,19 @@ final class ShareViewController: UIViewController {
     private func presentImageForm(fileName: String) {
         embed(ShareComposeView(
             kind: .image,
-            onSave: { [weak self] title, _, date in
+            onSave: { [weak self] title, _, _, date in
                 self?.saveImageReminder(title: title, date: date, fileName: fileName)
+            },
+            onCancel: { [weak self] in self?.cancel() }
+        ))
+    }
+
+    private func presentMemoForm(prefilledMemo: String) {
+        embed(ShareComposeView(
+            kind: .memo,
+            initialMemo: prefilledMemo,
+            onSave: { [weak self] title, _, memo, date in
+                self?.saveMemoReminder(title: title, memo: memo, date: date)
             },
             onCancel: { [weak self] in self?.cancel() }
         ))
@@ -112,6 +128,22 @@ final class ShareViewController: UIViewController {
         finish()
     }
 
+    private func saveMemoReminder(title: String, memo: String, date: Date) {
+        let id = UUID()
+        scheduleNotification(id: id, title: title, date: date)
+        let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        var payload: [String: Any] = [
+            "id": id.uuidString,
+            "contentTypeRaw": "memo",
+            "title": title,
+            "scheduledAt": date.timeIntervalSince1970,
+            "sharedAt": Date().timeIntervalSince1970,
+        ]
+        if !trimmedMemo.isEmpty { payload["memo"] = trimmedMemo }
+        persist(payload: payload)
+        finish()
+    }
+
     // MARK: - 알림 직접 예약 (확장)
 
     private func scheduleNotification(id: UUID, title: String, date: Date) {
@@ -153,13 +185,21 @@ final class ShareViewController: UIViewController {
             .flatMap { $0 } ?? []
     }
 
-    private func resolveURLString(from providers: [NSItemProvider], completion: @escaping (String?) -> Void) {
+    /// 공유 콘텐츠 분기: 링크가 있으면 .url, 순수 텍스트(링크 없음)면 .memo(본문).
+    private enum ShareContent {
+        case url(String)
+        case memo(String)   // 메모 본문(빈 문자열 가능)
+    }
+
+    private func resolveShareContent(from providers: [NSItemProvider], completion: @escaping (ShareContent) -> Void) {
         if let urlProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }) {
             urlProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
                 guard let self else { return }
-                if let url = Self.url(from: item) { completion(url.absoluteString); return }
+                if let url = Self.url(from: item) { completion(.url(url.absoluteString)); return }
                 _ = urlProvider.loadObject(ofClass: URL.self) { url, _ in
-                    completion(url?.absoluteString ?? self.firstURLFromContentText()?.absoluteString)
+                    if let s = url?.absoluteString { completion(.url(s)) }
+                    else if let s = self.firstURLFromContentText()?.absoluteString { completion(.url(s)) }
+                    else { completion(.memo(self.contentText() ?? "")) }
                 }
             }
             return
@@ -167,12 +207,16 @@ final class ShareViewController: UIViewController {
         if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
             textProvider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { [weak self] item, _ in
                 guard let self else { return }
-                let textURL = (item as? String).flatMap(Self.firstURL(in:))
-                completion(textURL?.absoluteString ?? self.firstURLFromContentText()?.absoluteString)
+                let text = (item as? String) ?? ""
+                // 텍스트 안에 링크가 있으면 기존처럼 URL로 취급(동작 보존), 없으면 메모 본문으로.
+                if let textURL = Self.firstURL(in: text) { completion(.url(textURL.absoluteString)) }
+                else if let s = self.firstURLFromContentText()?.absoluteString { completion(.url(s)) }
+                else { completion(.memo(text.isEmpty ? (self.contentText() ?? "") : text)) }
             }
             return
         }
-        completion(firstURLFromContentText()?.absoluteString)
+        if let s = firstURLFromContentText()?.absoluteString { completion(.url(s)) }
+        else { completion(.memo(contentText() ?? "")) }
     }
 
     private func firstURLFromContentText() -> URL? {
@@ -182,6 +226,15 @@ final class ShareViewController: UIViewController {
                let url = Self.firstURL(in: text) {
                 return url
             }
+        }
+        return nil
+    }
+
+    /// 공유 항목의 첨부 텍스트(attributedContentText) 원문. 메모 본문 프리필용.
+    private func contentText() -> String? {
+        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        for item in items {
+            if let text = item.attributedContentText?.string, !text.isEmpty { return text }
         }
         return nil
     }

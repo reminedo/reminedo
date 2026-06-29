@@ -162,7 +162,7 @@ struct ReminedoApp: App {
             reminder = Reminder(
                 id: id, title: title, scheduledAt: scheduledAt,
                 repeatRule: .none, isEnabled: true,
-                contentType: .memo, memo: "",
+                contentType: .memo, memo: payload.memo ?? "",
                 snoozeEnabled: true, snoozeMinutes: 5, soundType: .defaultSound
             )
         }

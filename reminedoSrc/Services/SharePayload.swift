@@ -7,7 +7,7 @@
 //
 //  페이로드 형식(확장과 합의된 단일 스키마):
 //    App Group UserDefaults 키 "sharedPayload"에 JSON Data 1건.
-//    JSON 객체 { "contentTypeRaw": String, "url"?: String, "imageFileName"?: String, "sharedAt": Double(epoch seconds) }.
+//    JSON 객체 { "contentTypeRaw": String, "url"?: String, "imageFileName"?: String, "memo"?: String, "sharedAt": Double(epoch seconds) }.
 //    인코딩/디코딩은 .secondsSince1970 날짜 전략으로 양쪽이 동일하게 맞춘다.
 //
 
@@ -20,6 +20,8 @@ struct SharePayload: Codable {
     let contentTypeRaw: String?
     let url: String?
     let imageFileName: String?
+    /// 메모 공유 본문(§4.10). contentTypeRaw == "memo"일 때 채워진다(없으면 nil — 제목만 공유한 경우).
+    let memo: String?
     let sharedAt: Date
     /// 공유 확장 폼에서 입력받는 제목·시각(없으면 nil — 이미지/구버전 하위호환).
     let title: String?
